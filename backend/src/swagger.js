@@ -49,43 +49,43 @@ export function createSwaggerSpec(serverUrl) {
   return {
     openapi: '3.0.3',
     info: {
-      title: 'توثيق ERB API',
+      title: 'ERB API Documentation',
       version: '1.0.0',
       description:
-        'توثيق واجهات الباك اند الخاصة بلوحة التحكم والمبيعات ومبيعات الآجل مع عمليات CRUD.'
+        'Backend API documentation for Dashboard, Sales, and Credit Sales with CRUD operations.'
     },
     servers: [
       {
         url: serverUrl,
-        description: 'الخادم المحلي'
+        description: 'Local Server'
       }
     ],
     tags: [
       {
-        name: 'الحالة',
-        description: 'فحص حالة النظام والبيئة'
+        name: 'System Status',
+        description: 'Check system and environment status'
       },
       {
-        name: 'لوحة التحكم',
-        description: 'بيانات الملخص العام'
+        name: 'Dashboard',
+        description: 'General summary data'
       },
       {
-        name: 'المبيعات',
-        description: 'إدارة عمليات المبيعات'
+        name: 'Sales',
+        description: 'Manage sales operations'
       },
       {
-        name: 'مبيعات الآجل',
-        description: 'إدارة مبيعات الآجل والتحصيل'
+        name: 'Credit Sales',
+        description: 'Manage credit sales and collections'
       }
     ],
     paths: {
       '/api/health': {
         get: {
-          tags: ['الحالة'],
-          summary: 'فحص حالة الباك اند',
+          tags: ['System Status'],
+          summary: 'Check backend status',
           responses: {
             200: {
-              description: 'حالة النظام',
+              description: 'System status',
               content: {
                 'application/json': {
                   schema: healthSchema
@@ -97,28 +97,28 @@ export function createSwaggerSpec(serverUrl) {
       },
       '/api/dashboard': {
         get: {
-          tags: ['لوحة التحكم'],
-          summary: 'جلب بيانات لوحة التحكم',
+          tags: ['Dashboard'],
+          summary: 'Get dashboard data',
           responses: {
             200: {
-              description: 'بيانات الملخص العام'
+              description: 'General summary data'
             }
           }
         }
       },
       '/api/sales': {
         get: {
-          tags: ['المبيعات'],
-          summary: 'جلب بيانات المبيعات',
+          tags: ['Sales'],
+          summary: 'Get sales data',
           responses: {
             200: {
-              description: 'قائمة المبيعات مع المؤشرات'
+              description: 'Sales list with metrics'
             }
           }
         },
         post: {
-          tags: ['المبيعات'],
-          summary: 'إضافة عملية بيع جديدة',
+          tags: ['Sales'],
+          summary: 'Add new sales record',
           requestBody: {
             required: true,
             content: {
@@ -129,15 +129,15 @@ export function createSwaggerSpec(serverUrl) {
           },
           responses: {
             201: {
-              description: 'تم إنشاء سجل المبيعات'
+              description: 'Sales record created'
             }
           }
         }
       },
       '/api/sales/{id}': {
         put: {
-          tags: ['المبيعات'],
-          summary: 'تعديل عملية بيع',
+          tags: ['Sales'],
+          summary: 'Update sales record',
           parameters: [
             {
               name: 'id',
@@ -156,13 +156,13 @@ export function createSwaggerSpec(serverUrl) {
           },
           responses: {
             200: {
-              description: 'تم تعديل السجل'
+              description: 'Record updated'
             }
           }
         },
         delete: {
-          tags: ['المبيعات'],
-          summary: 'حذف عملية بيع',
+          tags: ['Sales'],
+          summary: 'Delete sales record',
           parameters: [
             {
               name: 'id',
@@ -173,24 +173,24 @@ export function createSwaggerSpec(serverUrl) {
           ],
           responses: {
             204: {
-              description: 'تم حذف السجل'
+              description: 'Record deleted'
             }
           }
         }
       },
       '/api/credit-sales': {
         get: {
-          tags: ['مبيعات الآجل'],
-          summary: 'جلب بيانات مبيعات الآجل',
+          tags: ['Credit Sales'],
+          summary: 'Get credit sales data',
           responses: {
             200: {
-              description: 'قائمة مبيعات الآجل مع المؤشرات'
+              description: 'Credit sales list with metrics'
             }
           }
         },
         post: {
-          tags: ['مبيعات الآجل'],
-          summary: 'إضافة سجل مبيعات آجل',
+          tags: ['Credit Sales'],
+          summary: 'Add new credit sales record',
           requestBody: {
             required: true,
             content: {
@@ -201,15 +201,15 @@ export function createSwaggerSpec(serverUrl) {
           },
           responses: {
             201: {
-              description: 'تم إنشاء سجل مبيعات الآجل'
+              description: 'Credit sales record created'
             }
           }
         }
       },
       '/api/credit-sales/{id}': {
         put: {
-          tags: ['مبيعات الآجل'],
-          summary: 'تعديل سجل مبيعات آجل',
+          tags: ['Credit Sales'],
+          summary: 'Update credit sales record',
           parameters: [
             {
               name: 'id',
@@ -228,13 +228,13 @@ export function createSwaggerSpec(serverUrl) {
           },
           responses: {
             200: {
-              description: 'تم تعديل السجل'
+              description: 'Record updated'
             }
           }
         },
         delete: {
-          tags: ['مبيعات الآجل'],
-          summary: 'حذف سجل مبيعات آجل',
+          tags: ['Credit Sales'],
+          summary: 'Delete credit sales record',
           parameters: [
             {
               name: 'id',
@@ -245,7 +245,7 @@ export function createSwaggerSpec(serverUrl) {
           ],
           responses: {
             204: {
-              description: 'تم حذف السجل'
+              description: 'Record deleted'
             }
           }
         }

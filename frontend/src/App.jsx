@@ -191,8 +191,7 @@ function DashboardView({ dashboard, onNavigate }) {
     <>
       <section className="hero-grid">
         <article className="hero-card card">
-          <span className="hero-pill">نظام عربي بالكامل</span>
-          <h2>{brand?.headline ?? 'لوحة متابعة شاملة للمبيعات ومبيعات الآجل.'}</h2>
+
           <p className="hero-copy">
             {brand?.description ??
               'واجهة موحدة لعرض المؤشرات السريعة وآخر السجلات المهمة والتنبيهات التي تحتاج متابعة.'}
@@ -770,13 +769,7 @@ export default function App() {
       <div className="ambient ambient-two" />
 
       <aside className="sidebar card">
-        <div className="sidebar-brand">
-          <span className="brand-mark">ERB</span>
-          <div>
-            <p className="eyebrow">{dashboard.brand?.eyebrow ?? 'لوحة الاستعداد التنفيذي'}</p>
-            <h1 className="brand-title">{dashboard.brand?.name ?? 'مركز قيادة ERB'}</h1>
-          </div>
-        </div>
+
 
         <nav className="sidebar-nav">
           {navigation.map((item) => (
@@ -791,18 +784,6 @@ export default function App() {
             </a>
           ))}
         </nav>
-
-        <div className="sidebar-footer">
-          <div className="runtime-chip">
-            <span className={`runtime-dot ${dashboard.meta?.runtime === 'postgres' ? 'success' : 'warning'}`} />
-            <span>{dashboard.meta?.runtime === 'postgres' ? 'متصل بقاعدة البيانات' : 'تشغيل محلي'}</span>
-          </div>
-          <p className="sidebar-copy">
-            {dashboard.meta?.database === 'connected'
-              ? 'النظام يعمل على اتصال قاعدة بيانات محلية.'
-              : 'النظام يعمل حاليًا على بيانات محلية قابلة للتعديل.'}
-          </p>
-        </div>
       </aside>
 
       <main className="workspace">
