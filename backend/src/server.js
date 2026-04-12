@@ -7,11 +7,19 @@ import {
   createSalesRecord,
   deleteCreditSalesRecord,
   deleteSalesRecord,
+  getReturnsData,
+  createReturnRecord,
+  updateReturnRecord,
+  deleteReturnRecord,
   getCreditSalesData,
   getDashboardData,
   getSalesData,
   updateCreditSalesRecord,
-  updateSalesRecord
+  updateSalesRecord,
+  getPriceListData,
+  createPriceListRecord,
+  updatePriceListRecord,
+  deletePriceListRecord
 } from './data/erbStore.js';
 import { getDatabaseStatus, safeQuery } from './db.js';
 import { createSwaggerSpec } from './swagger.js';
@@ -63,6 +71,28 @@ function validateCreditSalesPayload(body) {
   return '';
 }
 
+function validateReturnsPayload(body) {
+  if (!body.customerName || !body.salesRep || !body.returnDate) {
+    return 'يرجى إدخال اسم العميل ومسؤول المبيعات وتاريخ الإرجاع.';
+  }
+
+  if (Number(body.amount) <= 0) {
+    return 'قيمة المرتجع يجب أن تكون أكبر من صفر.';
+  }
+
+  return '';
+}
+
+function validatePriceListPayload(body) {
+  if (!body.productName) {
+    return 'يرجى إدخال اسم المنتج.';
+  }
+  if (Number(body.purchasePrice) < 0 || Number(body.sellingPrice) < 0) {
+    return 'الأسعار لا يمكن أن تكون سالبة.';
+  }
+  return '';
+}
+
 async function getDashboardPayload() {
   const databaseStatus = await getDatabaseStatus();
 
@@ -87,15 +117,23 @@ app.get('/api/health', async (_request, response) => {
 });
 
 app.get('/api/dashboard', async (_request, response) => {
-  const payload = await getDashboardPayload();
-  response.json(payload);
+  try {
+    const payload = await getDashboardPayload();
+    response.json(payload);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
 });
 
-app.get('/api/sales', (_request, response) => {
-  response.json(getSalesData());
+app.get('/api/sales', async (_request, response) => {
+  try {
+    response.json(await getSalesData());
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
 });
 
-app.post('/api/sales', (request, response) => {
+app.post('/api/sales', async (request, response) => {
   const validationMessage = validateSalesPayload(request.body);
 
   if (validationMessage) {
@@ -103,11 +141,15 @@ app.post('/api/sales', (request, response) => {
     return;
   }
 
-  const created = createSalesRecord(request.body);
-  response.status(201).json(created);
+  try {
+    const created = await createSalesRecord(request.body);
+    response.status(201).json(created);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
 });
 
-app.put('/api/sales/:id', (request, response) => {
+app.put('/api/sales/:id', async (request, response) => {
   const validationMessage = validateSalesPayload(request.body);
 
   if (validationMessage) {
@@ -115,36 +157,52 @@ app.put('/api/sales/:id', (request, response) => {
     return;
   }
 
-  const updated = updateSalesRecord(request.params.id, request.body);
+  try {
+    const updated = await updateSalesRecord(request.params.id, request.body);
 
-  if (!updated) {
-    response.status(404).json({ message: 'سجل المبيعات المطلوب غير موجود.' });
-    return;
+    if (!updated) {
+      response.status(404).json({ message: 'سجل المبيعات المطلوب غير موجود.' });
+      return;
+    }
+
+    response.json(updated);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
   }
-
-  response.json(updated);
 });
 
-app.delete('/api/sales/:id', (request, response) => {
-  const deleted = deleteSalesRecord(request.params.id);
+app.delete('/api/sales/:id', async (request, response) => {
+  try {
+    const deleted = await deleteSalesRecord(request.params.id);
 
-  if (!deleted) {
-    response.status(404).json({ message: 'سجل المبيعات المطلوب غير موجود.' });
-    return;
+    if (!deleted) {
+      response.status(404).json({ message: 'سجل المبيعات المطلوب غير موجود.' });
+      return;
+    }
+
+    response.status(204).send();
+  } catch (err) {
+    response.status(500).json({ message: err.message });
   }
-
-  response.status(204).send();
 });
 
-app.get('/api/credit-sales', (_request, response) => {
-  response.json(getCreditSalesData());
+app.get('/api/credit-sales', async (_request, response) => {
+  try {
+    response.json(await getCreditSalesData());
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
 });
 
-app.get('/api/credit', (_request, response) => {
-  response.json(getCreditSalesData());
+app.get('/api/credit', async (_request, response) => {
+  try {
+    response.json(await getCreditSalesData());
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
 });
 
-app.post('/api/credit-sales', (request, response) => {
+app.post('/api/credit-sales', async (request, response) => {
   const validationMessage = validateCreditSalesPayload(request.body);
 
   if (validationMessage) {
@@ -152,11 +210,15 @@ app.post('/api/credit-sales', (request, response) => {
     return;
   }
 
-  const created = createCreditSalesRecord(request.body);
-  response.status(201).json(created);
+  try {
+    const created = await createCreditSalesRecord(request.body);
+    response.status(201).json(created);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
 });
 
-app.put('/api/credit-sales/:id', (request, response) => {
+app.put('/api/credit-sales/:id', async (request, response) => {
   const validationMessage = validateCreditSalesPayload(request.body);
 
   if (validationMessage) {
@@ -164,25 +226,155 @@ app.put('/api/credit-sales/:id', (request, response) => {
     return;
   }
 
-  const updated = updateCreditSalesRecord(request.params.id, request.body);
+  try {
+    const updated = await updateCreditSalesRecord(request.params.id, request.body);
 
-  if (!updated) {
-    response.status(404).json({ message: 'سجل مبيعات الآجل المطلوب غير موجود.' });
-    return;
+    if (!updated) {
+      response.status(404).json({ message: 'سجل مبيعات الآجل المطلوب غير موجود.' });
+      return;
+    }
+
+    response.json(updated);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
   }
-
-  response.json(updated);
 });
 
-app.delete('/api/credit-sales/:id', (request, response) => {
-  const deleted = deleteCreditSalesRecord(request.params.id);
+app.delete('/api/credit-sales/:id', async (request, response) => {
+  try {
+    const deleted = await deleteCreditSalesRecord(request.params.id);
 
-  if (!deleted) {
-    response.status(404).json({ message: 'سجل مبيعات الآجل المطلوب غير موجود.' });
+    if (!deleted) {
+      response.status(404).json({ message: 'سجل مبيعات الآجل المطلوب غير موجود.' });
+      return;
+    }
+
+    response.status(204).send();
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.get('/api/returns', async (_request, response) => {
+  try {
+    response.json(await getReturnsData());
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/returns', async (request, response) => {
+  const validationMessage = validateReturnsPayload(request.body);
+
+  if (validationMessage) {
+    response.status(400).json({ message: validationMessage });
     return;
   }
 
-  response.status(204).send();
+  try {
+    const created = await createReturnRecord(request.body);
+    response.status(201).json(created);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/returns/:id', async (request, response) => {
+  const validationMessage = validateReturnsPayload(request.body);
+
+  if (validationMessage) {
+    response.status(400).json({ message: validationMessage });
+    return;
+  }
+
+  try {
+    const updated = await updateReturnRecord(request.params.id, request.body);
+
+    if (!updated) {
+      response.status(404).json({ message: 'سجل المرتجع المطلوب غير موجود.' });
+      return;
+    }
+
+    response.json(updated);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/returns/:id', async (request, response) => {
+  try {
+    const deleted = await deleteReturnRecord(request.params.id);
+
+    if (!deleted) {
+      response.status(404).json({ message: 'سجل المرتجع المطلوب غير موجود.' });
+      return;
+    }
+
+    response.status(204).send();
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.get('/api/price-list', async (_request, response) => {
+  try {
+    response.json(await getPriceListData());
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/price-list', async (request, response) => {
+  const validationMessage = validatePriceListPayload(request.body);
+
+  if (validationMessage) {
+    response.status(400).json({ message: validationMessage });
+    return;
+  }
+
+  try {
+    const created = await createPriceListRecord(request.body);
+    response.status(201).json(created);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/price-list/:id', async (request, response) => {
+  const validationMessage = validatePriceListPayload(request.body);
+
+  if (validationMessage) {
+    response.status(400).json({ message: validationMessage });
+    return;
+  }
+
+  try {
+    const updated = await updatePriceListRecord(request.params.id, request.body);
+
+    if (!updated) {
+      response.status(404).json({ message: 'المنتج المطلوب غير موجود.' });
+      return;
+    }
+
+    response.json(updated);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/price-list/:id', async (request, response) => {
+  try {
+    const deleted = await deletePriceListRecord(request.params.id);
+
+    if (!deleted) {
+      response.status(404).json({ message: 'المنتج المطلوب غير موجود.' });
+      return;
+    }
+
+    response.status(204).send();
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
 });
 
 app.get('/api/tasks', async (_request, response) => {
