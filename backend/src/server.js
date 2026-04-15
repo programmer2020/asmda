@@ -19,7 +19,14 @@ import {
   getPriceListData,
   createPriceListRecord,
   updatePriceListRecord,
-  deletePriceListRecord
+  deletePriceListRecord,
+  getCustodiesData,
+  createCustodyRecord,
+  updateCustodyRecord,
+  deleteCustodyRecord,
+  getCustodyTransactions,
+  createCustodyTransaction,
+  deleteCustodyTransaction
 } from './data/erbStore.js';
 import { getDatabaseStatus, safeQuery } from './db.js';
 import { createSwaggerSpec } from './swagger.js';
@@ -385,6 +392,102 @@ app.get('/api/tasks', async (_request, response) => {
   response.json({
     data: tasksResult.ok ? tasksResult.rows : []
   });
+});
+
+function validateCustodyPayload(body) {
+  if (!body.employeeName) return 'يرجى إدخال اسم المستلم.';
+  if (!body.custodyType) return 'يرجى تحديد نوع العهدة.';
+  if (body.custodyType === 'نقدية' && Number(body.initialAmount) <= 0) {
+    return 'قيمة العهدة النقدية يجب أن تكون أكبر من صفر.';
+  }
+  return '';
+}
+
+app.get('/api/custodies', async (_request, response) => {
+  try {
+    response.json(await getCustodiesData());
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/custodies', async (request, response) => {
+  const validationMSG = validateCustodyPayload(request.body);
+  if (validationMSG) {
+    response.status(400).json({ message: validationMSG });
+    return;
+  }
+  try {
+    const created = await createCustodyRecord(request.body);
+    response.status(201).json(created);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/custodies/:id', async (request, response) => {
+  const validationMSG = validateCustodyPayload(request.body);
+  if (validationMSG) {
+    response.status(400).json({ message: validationMSG });
+    return;
+  }
+  try {
+    const updated = await updateCustodyRecord(request.params.id, request.body);
+    if (!updated) {
+      response.status(404).json({ message: 'العهدة غير موجودة.' });
+      return;
+    }
+    response.json(updated);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/custodies/:id', async (request, response) => {
+  try {
+    const deleted = await deleteCustodyRecord(request.params.id);
+    if (!deleted) {
+      response.status(404).json({ message: 'العهدة غير موجودة.' });
+      return;
+    }
+    response.status(204).send();
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.get('/api/custodies/:id/transactions', async (request, response) => {
+  try {
+    response.json(await getCustodyTransactions(request.params.id));
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/custodies/:id/transactions', async (request, response) => {
+  try {
+    if (!request.body.transactionType) {
+      response.status(400).json({ message: 'نوع الحركة مطلوب.' });
+      return;
+    }
+    const created = await createCustodyTransaction(request.params.id, request.body);
+    response.status(201).json(created);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/custodies/:id/transactions/:txId', async (request, response) => {
+  try {
+    const deleted = await deleteCustodyTransaction(request.params.txId);
+    if (!deleted) {
+      response.status(404).json({ message: 'الحركة غير موجودة.' });
+      return;
+    }
+    response.status(204).send();
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
 });
 
 app.listen(port, () => {

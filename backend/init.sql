@@ -45,13 +45,27 @@ CREATE TABLE IF NOT EXISTS price_list (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS petty_cash (
+DROP TABLE IF EXISTS petty_cash;
+
+CREATE TABLE IF NOT EXISTS custodies (
   id VARCHAR(50) PRIMARY KEY,
   employee_name VARCHAR(255) NOT NULL,
+  custody_type VARCHAR(50) NOT NULL,
+  item_details TEXT,
+  initial_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  current_balance NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  start_date DATE,
+  status VARCHAR(50) DEFAULT 'نشطة',
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS custody_transactions (
+  id VARCHAR(50) PRIMARY KEY,
+  custody_id VARCHAR(50) NOT NULL REFERENCES custodies(id) ON DELETE CASCADE,
+  transaction_type VARCHAR(50) NOT NULL,
   amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
   date DATE,
-  reason TEXT,
-  status VARCHAR(50) DEFAULT 'مستمرة',
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

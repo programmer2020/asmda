@@ -534,42 +534,63 @@ export async function deletePriceListRecord(id) {
   return result.rowCount > 0;
 }
 
-function mapPettyCashItem(row) {
+function mapCustodyItem(row) {
   return {
     id: row.id,
     employeeName: row.employee_name,
-    amount: Number(row.amount),
-    date: row.date ? new Date(row.date).toISOString().split('T')[0] : null,
-    reason: row.reason || '',
+    custodyType: row.custody_type,
+    itemDetails: row.item_details || '',
+    initialAmount: Number(row.initial_amount),
+    currentBalance: Number(row.current_balance),
+    startDate: row.start_date ? new Date(row.start_date).toISOString().split('T')[0] : null,
     status: row.status,
     notes: row.notes || ''
   };
 }
 
-export async function getPettyCashData() {
-  const result = await query('SELECT * FROM petty_cash ORDER BY created_at DESC');
-  const items = result.rows.map(mapPettyCashItem);
+function mapCustodyTransaction(row) {
+  return {
+    id: row.id,
+    custodyId: row.custody_id,
+    transactionType: row.transaction_type,
+    amount: Number(row.amount),
+    date: row.date ? new Date(row.date).toISOString().split('T')[0] : null,
+    notes: row.notes || ''
+  };
+}
 
-  const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
-  const activeCount = items.filter((item) => item.status === 'مستمرة').length;
-  const activeAmount = items.filter((item) => item.status === 'مستمرة').reduce((sum, item) => sum + item.amount, 0);
+export async function getCustodiesData() {
+  const result = await query('SELECT * FROM custodies ORDER BY created_at DESC');
+  const items = result.rows.map(mapCustodyItem);
+
+  const activeCash = items.filter(item => item.custodyType === 'نقدية' && item.status === 'نشطة').reduce((sum, item) => sum + item.currentBalance, 0);
+  const activeItemsCount = items.filter(item => item.custodyType === 'عينية' && item.status === 'نشطة').length;
+  const activeCount = items.filter((item) => item.status === 'نشطة').length;
 
   const overview = [
     {
-      id: 'petty-cash-total',
-      label: 'إجمالي العهد المفتوحة',
-      value: activeAmount,
+      id: 'custodies-cash',
+      label: 'إجمالي الأرصدة النقدية',
+      value: activeCash,
       type: 'currency',
-      helper: 'مبالغ تحت التسوية',
+      helper: 'يحتفظ بها الموظفون',
       tone: 'warning'
     },
     {
-      id: 'petty-cash-count',
-      label: 'عدد العهد',
+      id: 'custodies-items',
+      label: 'العهد العينية',
+      value: activeItemsCount,
+      type: 'number',
+      helper: 'أصول بصحبة الموظفين',
+      tone: 'calm'
+    },
+    {
+      id: 'custodies-active',
+      label: 'العهد النشطة',
       value: activeCount,
       type: 'number',
-      helper: 'عهدة مستمرة متبقية',
-      tone: 'calm'
+      helper: 'إجمالي العهد المفتوحة',
+      tone: 'accent'
     }
   ];
 
@@ -579,56 +600,132 @@ export async function getPettyCashData() {
   };
 }
 
-export async function createPettyCashRecord(payload) {
-  const id = await nextId('CSH', 'petty_cash');
+export async function createCustodyRecord(payload) {
+  const id = await nextId('CST', 'custodies');
 
   const text = `
-    INSERT INTO petty_cash 
-    (id, employee_name, amount, date, reason, status, notes) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
+    INSERT INTO custodies 
+    (id, employee_name, custody_type, item_details, initial_amount, current_balance, start_date, status, notes) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *
   `;
+  const isCash = payload.custodyType === 'نقدية';
   const values = [
     id,
     payload.employeeName || '',
-    Number(payload.amount || 0),
-    payload.date || null,
-    payload.reason || '',
-    payload.status || 'مستمرة',
+    payload.custodyType || 'نقدية',
+    isCash ? '' : (payload.itemDetails || ''),
+    isCash ? Number(payload.initialAmount || 0) : 0,
+    isCash ? Number(payload.initialAmount || 0) : 0,
+    payload.startDate || null,
+    payload.status || 'نشطة',
     payload.notes || ''
   ];
 
   const result = await query(text, values);
-  return mapPettyCashItem(result.rows[0]);
+  return mapCustodyItem(result.rows[0]);
 }
 
-export async function updatePettyCashRecord(id, payload) {
+export async function updateCustodyRecord(id, payload) {
   const text = `
-    UPDATE petty_cash SET 
+    UPDATE custodies SET 
       employee_name = COALESCE($2, employee_name),
-      amount = COALESCE($3, amount),
-      date = COALESCE($4, date),
-      reason = COALESCE($5, reason),
+      custody_type = COALESCE($3, custody_type),
+      item_details = COALESCE($4, item_details),
+      initial_amount = COALESCE($5, initial_amount),
       status = COALESCE($6, status),
-      notes = COALESCE($7, notes)
+      start_date = COALESCE($7, start_date),
+      notes = COALESCE($8, notes)
     WHERE id = $1 RETURNING *
   `;
   const values = [
     id,
     payload.employeeName,
-    payload.amount !== undefined ? Number(payload.amount) : undefined,
-    payload.date,
-    payload.reason,
+    payload.custodyType,
+    payload.itemDetails,
+    payload.initialAmount !== undefined ? Number(payload.initialAmount) : undefined,
     payload.status,
+    payload.startDate,
     payload.notes
   ];
 
   const result = await query(text, values);
   if (result.rows.length === 0) return null;
-  return mapPettyCashItem(result.rows[0]);
+  return mapCustodyItem(result.rows[0]);
 }
 
-export async function deletePettyCashRecord(id) {
-  const result = await query('DELETE FROM petty_cash WHERE id = $1 RETURNING id', [id]);
+export async function deleteCustodyRecord(id) {
+  const result = await query('DELETE FROM custodies WHERE id = $1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+export async function getCustodyTransactions(custodyId) {
+  const result = await query('SELECT * FROM custody_transactions WHERE custody_id = $1 ORDER BY date DESC, created_at DESC', [custodyId]);
+  return result.rows.map(mapCustodyTransaction);
+}
+
+export async function createCustodyTransaction(custodyId, payload) {
+  const id = await nextId('CTX', 'custody_transactions');
+  
+  const text = `
+    INSERT INTO custody_transactions 
+    (id, custody_id, transaction_type, amount, date, notes) 
+    VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
+  `;
+  const amt = Number(payload.amount || 0);
+  const values = [
+    id,
+    custodyId,
+    payload.transactionType || 'صرف',
+    amt,
+    payload.date || null,
+    payload.notes || ''
+  ];
+
+  const result = await query(text, values);
+  const transaction = mapCustodyTransaction(result.rows[0]);
+
+  // Update current_balance of custody if it is a cash custody
+  const custodyRes = await query('SELECT custody_type, current_balance FROM custodies WHERE id = $1', [custodyId]);
+  if (custodyRes.rows.length > 0 && custodyRes.rows[0].custody_type === 'نقدية') {
+    let currentBalance = Number(custodyRes.rows[0].current_balance);
+    if (transaction.transactionType === 'صرف') {
+      currentBalance -= amt;
+    } else if (transaction.transactionType === 'استعاضة' || transaction.transactionType === 'إرجاع عهدة') {
+      currentBalance += amt;
+    } else if (transaction.transactionType === 'تسوية') {
+      // Settlement does not typically change the balance unless it means wiping it, but for our case let's assume it clears remaining
+      if (amt > 0) {
+        currentBalance -= amt; // Treat like expense
+      }
+    }
+    
+    await query('UPDATE custodies SET current_balance = $1 WHERE id = $2', [currentBalance, custodyId]);
+  }
+
+  return transaction;
+}
+
+export async function deleteCustodyTransaction(id) {
+  // We need to fetch the transaction first to reverse the balance effect
+  const trRes = await query('SELECT * FROM custody_transactions WHERE id = $1', [id]);
+  if (trRes.rows.length === 0) return false;
+  
+  const tr = mapCustodyTransaction(trRes.rows[0]);
+
+  const custodyRes = await query('SELECT custody_type, current_balance FROM custodies WHERE id = $1', [tr.custodyId]);
+  if (custodyRes.rows.length > 0 && custodyRes.rows[0].custody_type === 'نقدية') {
+    let currentBalance = Number(custodyRes.rows[0].current_balance);
+    if (tr.transactionType === 'صرف') {
+      currentBalance += tr.amount;
+    } else if (tr.transactionType === 'استعاضة' || tr.transactionType === 'إرجاع عهدة') {
+      currentBalance -= tr.amount;
+    } else if (tr.transactionType === 'تسوية') {
+      if (tr.amount > 0) currentBalance += tr.amount;
+    }
+    await query('UPDATE custodies SET current_balance = $1 WHERE id = $2', [currentBalance, tr.custodyId]);
+  }
+
+  const result = await query('DELETE FROM custody_transactions WHERE id = $1 RETURNING id', [id]);
   return result.rowCount > 0;
 }
 

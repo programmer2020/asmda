@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const apiBase = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '');
-const views = ['dashboard', 'sales', 'credit-sales', 'returns', 'price-list'];
+const views = ['dashboard', 'sales', 'credit-sales', 'returns', 'price-list', 'custodies'];
 
 const navigation = [
   {
@@ -28,12 +28,20 @@ const navigation = [
     id: 'price-list',
     label: 'قائمة الأسعار',
     helper: 'إدارة المنتجات وتسعيرها'
+  },
+  {
+    id: 'custodies',
+    label: 'العهد',
+    helper: 'إدارة العهد النقدية والعينية'
   }
 ];
 
 const salesStatuses = ['جديدة', 'قيد التنفيذ', 'مكتملة'];
 const creditStatuses = ['مستحقة', 'مسدد جزئيا', 'متأخرة', 'مسددة'];
 const returnStatuses = ['قيد المراجعة', 'مستلمة', 'تم التعويض', 'مرفوضة'];
+const custodyStatuses = ['نشطة', 'مغلقة'];
+const custodyTypes = ['نقدية', 'عينية'];
+const transactionTypes = ['صرف', 'استعاضة', 'تسوية', 'إرجاع عهدة'];
 
 const initialDashboard = {
   meta: null,
@@ -60,6 +68,11 @@ const initialReturns = {
 };
 
 const initialPriceList = {
+  overview: [],
+  items: []
+};
+
+const initialCustodies = {
   overview: [],
   items: []
 };
@@ -101,6 +114,23 @@ const initialPriceListForm = {
   category: '',
   purchasePrice: '',
   sellingPrice: '',
+  notes: ''
+};
+
+const initialCustodyForm = {
+  employeeName: '',
+  custodyType: 'نقدية',
+  itemDetails: '',
+  initialAmount: '',
+  startDate: '',
+  status: 'نشطة',
+  notes: ''
+};
+
+const initialTransactionForm = {
+  transactionType: 'صرف',
+  amount: '',
+  date: '',
   notes: ''
 };
 
@@ -839,6 +869,131 @@ function PriceListView({
   );
 }
 
+
+function CustodiesView({
+  custodies,
+  form,
+  editingId,
+  saving,
+  isFormOpen,
+  onOpenForm,
+  onCloseForm,
+  onChange,
+  onSubmit,
+  onEdit,
+  onDelete,
+  onManageTransactions
+}) {
+  return (
+    <>
+      <SummaryCards items={custodies.overview} />
+
+      <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
+        <article className="card table-card">
+          <div className="table-actions-header">
+            <div>
+              <p className="eyebrow">إدارة العهد</p>
+              <h3>سجل العهد النقدية والعينية</h3>
+            </div>
+            <button type="button" className="primary-button" onClick={onOpenForm}>
+              إضافة عهدة
+            </button>
+          </div>
+
+          <div className="table-list">
+            {custodies.items.map((item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.employeeName}</strong>
+                    <span className={`status-chip ${item.status === 'نشطة' ? 'success' : 'neutral'}`}>{item.status}</span>
+                    <span className="status-chip warning">{item.custodyType}</span>
+                  </div>
+                  <p>{item.custodyType === 'نقدية' ? 'مبلغ مالي' : item.itemDetails}</p>
+                </div>
+                <div className="table-side">
+                  {item.custodyType === 'نقدية' && (
+                    <div style={{ textAlign: 'left', marginBottom: '8px' }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-light)' }}>
+                        المبلغ الأساسي: {formatMoney(item.initialAmount)}
+                      </div>
+                      <strong>الرصيد: {formatMoney(item.currentBalance)}</strong>
+                    </div>
+                  )}
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => onManageTransactions(item.id)}>
+                      {item.custodyType === 'نقدية' ? 'تتبع مصاريف' : 'سجل حركة'}
+                    </button>
+                    <button type="button" className="ghost-button small" onClick={() => onEdit(item)}>
+                      تعديل
+                    </button>
+                    <button type="button" className="danger-button small" onClick={() => onDelete(item.id)}>
+                      حذف
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </article>
+      </section>
+
+      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل العهدة' : 'إضافة عهدة جديدة'}>
+        <form className="form-grid" onSubmit={onSubmit}>
+          <label>
+            <span>اسم المستلم</span>
+            <input name="employeeName" value={form.employeeName} onChange={onChange} required />
+          </label>
+          <label>
+            <span>نوع العهدة</span>
+            <select name="custodyType" value={form.custodyType} onChange={onChange}>
+              {custodyTypes.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </label>
+          {form.custodyType === 'نقدية' ? (
+            <label>
+              <span>قيمة العهدة</span>
+              <input name="initialAmount" type="number" min="0" step="0.01" value={form.initialAmount} onChange={onChange} required />
+            </label>
+          ) : (
+            <label>
+              <span>بيانات العهدة العينية</span>
+              <input name="itemDetails" value={form.itemDetails || ''} onChange={onChange} placeholder="مثال: لابتوب ديل - رقم 123" required />
+            </label>
+          )}
+          <label>
+            <span>حالة العهدة</span>
+            <select name="status" value={form.status} onChange={onChange}>
+              {custodyStatuses.map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>تاريخ التسليم</span>
+            <input name="startDate" type="date" value={form.startDate} onChange={onChange} />
+          </label>
+          <label className="full-width">
+            <span>ملاحظات</span>
+            <textarea name="notes" rows="2" value={form.notes} onChange={onChange} />
+          </label>
+
+          <div className="form-actions full-width" style={{ marginTop: '16px' }}>
+            <button type="submit" className="primary-button" disabled={saving}>
+              {saving ? 'جارٍ الحفظ...' : editingId ? 'حفظ التعديل' : 'إضافة العهدة'}
+            </button>
+            <button type="button" className="ghost-button" onClick={onCloseForm}>
+              إلغاء
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  );
+}
+
 export default function App() {
   const [activeView, setActiveView] = useState(getInitialView);
   const [dashboard, setDashboard] = useState(initialDashboard);
@@ -846,14 +1001,18 @@ export default function App() {
   const [creditSales, setCreditSales] = useState(initialCreditSales);
   const [returns, setReturns] = useState(initialReturns);
   const [priceList, setPriceList] = useState(initialPriceList);
+  const [custodies, setCustodies] = useState(initialCustodies);
   const [salesForm, setSalesForm] = useState(initialSalesForm);
   const [creditForm, setCreditForm] = useState(initialCreditForm);
   const [returnsForm, setReturnsForm] = useState(initialReturnsForm);
   const [priceListForm, setPriceListForm] = useState(initialPriceListForm);
+  const [custodyForm, setCustodyForm] = useState(initialCustodyForm);
+  const [transactionForm, setTransactionForm] = useState(initialTransactionForm);
   const [salesEditingId, setSalesEditingId] = useState('');
   const [creditEditingId, setCreditEditingId] = useState('');
   const [returnsEditingId, setReturnsEditingId] = useState('');
   const [priceListEditingId, setPriceListEditingId] = useState('');
+  const [custodyEditingId, setCustodyEditingId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -861,14 +1020,20 @@ export default function App() {
   const [creditSaving, setCreditSaving] = useState(false);
   const [returnsSaving, setReturnsSaving] = useState(false);
   const [priceListSaving, setPriceListSaving] = useState(false);
+  const [custodiesSaving, setCustodiesSaving] = useState(false);
+  const [transactionSaving, setTransactionSaving] = useState(false);
 
   // Modal visibility state
   const [salesFormOpen, setSalesFormOpen] = useState(false);
   const [creditFormOpen, setCreditFormOpen] = useState(false);
   const [returnsFormOpen, setReturnsFormOpen] = useState(false);
   const [priceListFormOpen, setPriceListFormOpen] = useState(false);
+  const [custodyFormOpen, setCustodyFormOpen] = useState(false);
+  const [transactionsModalOpen, setTransactionsModalOpen] = useState(false);
+  const [activeCustodyId, setActiveCustodyId] = useState(null);
+  const [activeCustodyTransactions, setActiveCustodyTransactions] = useState([]);
 
-  // Delete confirmation state: { type: 'sales'|'credit'|'returns', id }
+  // Delete confirmation state: { type: 'sales'|'credit'|'returns'|'price-list'|'custodies'|'transaction', id }
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
@@ -881,12 +1046,13 @@ export default function App() {
   }, []);
 
   async function loadWorkspace() {
-    const [dashboardData, salesData, creditData, returnsData, priceListData] = await Promise.all([
+    const [dashboardData, salesData, creditData, returnsData, priceListData, custodiesData] = await Promise.all([
       fetchJson(buildUrl('/dashboard')),
       fetchJson(buildUrl('/sales')),
       fetchJson(buildUrl('/credit-sales')),
       fetchJson(buildUrl('/returns')),
-      fetchJson(buildUrl('/price-list'))
+      fetchJson(buildUrl('/price-list')),
+      fetchJson(buildUrl('/custodies'))
     ]);
 
     setDashboard(dashboardData);
@@ -894,6 +1060,7 @@ export default function App() {
     setCreditSales(creditData);
     setReturns(returnsData);
     setPriceList(priceListData);
+    setCustodies(custodiesData);
   }
 
   useEffect(() => {
@@ -1223,19 +1390,169 @@ export default function App() {
     }
   }
 
+
+  // ── Custodies ─────────────────────────────────────────
+  function handleCustodyInputChange(event) {
+    const { name, value } = event.target;
+    setCustodyForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function openCustodyForm() {
+    setCustodyEditingId('');
+    setCustodyForm(initialCustodyForm);
+    setCustodyFormOpen(true);
+  }
+
+  function startCustodyEdit(item) {
+    setCustodyEditingId(item.id);
+    setCustodyForm({
+      employeeName: item.employeeName,
+      custodyType: item.custodyType,
+      itemDetails: item.itemDetails,
+      initialAmount: String(item.initialAmount ?? 0),
+      status: item.status,
+      startDate: item.startDate,
+      notes: item.notes ?? ''
+    });
+    setCustodyFormOpen(true);
+  }
+
+  function closeCustodyForm() {
+    setCustodyFormOpen(false);
+    setCustodyEditingId('');
+    setCustodyForm(initialCustodyForm);
+  }
+
+  async function handleCustodySubmit(event) {
+    event.preventDefault();
+    try {
+      setCustodiesSaving(true);
+      setError('');
+      setNotice('');
+      const payload = {
+        ...custodyForm,
+        initialAmount: Number(custodyForm.initialAmount)
+      };
+      await fetchJson(
+        custodyEditingId ? buildUrl(`/custodies/${custodyEditingId}`) : buildUrl('/custodies'),
+        { method: custodyEditingId ? 'PUT' : 'POST', body: JSON.stringify(payload) }
+      );
+      await loadWorkspace();
+      const msg = custodyEditingId ? 'تم تعديل العهدة بنجاح.' : 'تمت إضافة العهدة بنجاح.';
+      closeCustodyForm();
+      setNotice(msg);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setCustodiesSaving(false);
+    }
+  }
+
+  function requestCustodyDelete(id) {
+    setDeleteTarget({ type: 'custodies', id });
+  }
+
+  async function confirmCustodyDelete() {
+    const id = deleteTarget.id;
+    setDeleteTarget(null);
+    try {
+      setError('');
+      setNotice('');
+      await fetchJson(buildUrl(`/custodies/${id}`), { method: 'DELETE' });
+      await loadWorkspace();
+      setNotice('تم حذف العهدة بنجاح.');
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
+  async function openCustodyTransactions(id) {
+    setActiveCustodyId(id);
+    try {
+      setError('');
+      const txs = await fetchJson(buildUrl(`/custodies/${id}/transactions`));
+      setActiveCustodyTransactions(txs);
+      setTransactionsModalOpen(true);
+      setTransactionForm(initialTransactionForm);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
+  function closeTransactionsModal() {
+    setTransactionsModalOpen(false);
+    setActiveCustodyId(null);
+    setActiveCustodyTransactions([]);
+  }
+
+  function handleTransactionInputChange(event) {
+    const { name, value } = event.target;
+    setTransactionForm((current) => ({ ...current, [name]: value }));
+  }
+
+  async function handleTransactionSubmit(event) {
+    event.preventDefault();
+    try {
+      setTransactionSaving(true);
+      setError('');
+      setNotice('');
+      const payload = {
+        ...transactionForm,
+        amount: Number(transactionForm.amount)
+      };
+      await fetchJson(buildUrl(`/custodies/${activeCustodyId}/transactions`), {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      const txs = await fetchJson(buildUrl(`/custodies/${activeCustodyId}/transactions`));
+      setActiveCustodyTransactions(txs);
+      await loadWorkspace();
+      setNotice('تم تسجيل الحركة بنجاح.');
+      setTransactionForm(initialTransactionForm);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setTransactionSaving(false);
+    }
+  }
+
+  function requestTransactionDelete(id) {
+    setDeleteTarget({ type: 'transaction', id });
+  }
+
+  async function confirmTransactionDelete() {
+    const id = deleteTarget.id;
+    setDeleteTarget(null);
+    try {
+      setError('');
+      setNotice('');
+      await fetchJson(buildUrl(`/custodies/${activeCustodyId}/transactions/${id}`), { method: 'DELETE' });
+      const txs = await fetchJson(buildUrl(`/custodies/${activeCustodyId}/transactions`));
+      setActiveCustodyTransactions(txs);
+      await loadWorkspace();
+      setNotice('تم التراجع عن الحركة بنجاح.');
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
   function handleConfirmDelete() {
     if (!deleteTarget) return;
     if (deleteTarget.type === 'sales') confirmSalesDelete();
     else if (deleteTarget.type === 'credit') confirmCreditDelete();
     else if (deleteTarget.type === 'returns') confirmReturnsDelete();
     else if (deleteTarget.type === 'price-list') confirmPriceListDelete();
+    else if (deleteTarget.type === 'custodies') confirmCustodyDelete();
+    else if (deleteTarget.type === 'transaction') confirmTransactionDelete();
   }
 
   const deleteMessages = {
     sales: 'هل أنت متأكد من حذف عملية البيع هذه؟ لا يمكن التراجع عن هذا الإجراء.',
     credit: 'هل أنت متأكد من حذف سجل مبيعات الآجل هذا؟ لا يمكن التراجع عن هذا الإجراء.',
     returns: 'هل أنت متأكد من حذف هذا المرتجع؟ لا يمكن التراجع عن هذا الإجراء.',
-    'price-list': 'هل أنت متأكد من حذف هذا المنتج من قائمة الأسعار؟ لا يمكن التراجع عن هذا الإجراء.'
+    'price-list': 'هل أنت متأكد من حذف هذا المنتج من قائمة الأسعار؟ لا يمكن التراجع عن هذا الإجراء.',
+    custodies: 'هل أنت متأكد من حذف العهدة؟ لا يمكن التراجع، سيتم حذف جميع الحركات المتعلقة.',
+    transaction: 'هل أنت متأكد من حذف هذه الحركة؟ سيتم استرجاع رصيد العهدة كالمعاملة العكسية.'
   };
 
   const title = navigation.find((item) => item.id === activeView)?.label ?? 'لوحة التحكم';
@@ -1345,7 +1662,71 @@ export default function App() {
             onDelete={requestPriceListDelete}
           />
         ) : null}
+
+        {!loading && !error && activeView === 'custodies' ? (
+          <CustodiesView
+            custodies={custodies}
+            form={custodyForm}
+            editingId={custodyEditingId}
+            saving={custodiesSaving}
+            isFormOpen={custodyFormOpen}
+            onOpenForm={openCustodyForm}
+            onCloseForm={closeCustodyForm}
+            onChange={handleCustodyInputChange}
+            onSubmit={handleCustodySubmit}
+            onEdit={startCustodyEdit}
+            onDelete={requestCustodyDelete}
+            onManageTransactions={openCustodyTransactions}
+          />
+        ) : null}
       </main>
+
+      <Modal isOpen={transactionsModalOpen} onClose={closeTransactionsModal} title="إدارة حركات العهدة">
+        <div style={{ marginBottom: '24px' }}>
+          <form className="form-grid" onSubmit={handleTransactionSubmit} style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
+            <label>
+              <span>نوع الحركة</span>
+              <select name="transactionType" value={transactionForm.transactionType} onChange={handleTransactionInputChange}>
+                {transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>المبلغ</span>
+              <input name="amount" type="number" min="0" step="0.01" value={transactionForm.amount} onChange={handleTransactionInputChange} required />
+            </label>
+             <label className="full-width">
+              <span>التاريخ</span>
+              <input name="date" type="date" value={transactionForm.date} onChange={handleTransactionInputChange} />
+            </label>
+            <label className="full-width">
+              <span>ملاحظات</span>
+              <input name="notes" value={transactionForm.notes} onChange={handleTransactionInputChange} placeholder="مثل: فاتورة بنزين، استهلاك أحبار.." />
+            </label>
+            <div className="form-actions full-width" style={{ marginTop: '8px' }}>
+              <button type="submit" className="primary-button" disabled={transactionSaving}>
+                {transactionSaving ? 'جارٍ التسجيل' : 'تسجيل الحركة'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="table-list" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+          {activeCustodyTransactions.map(tx => (
+            <article key={tx.id} className="table-row" style={{ padding: '12px' }}>
+              <div className="table-main">
+                <strong>{tx.transactionType} <span style={{ color: 'var(--primary-color)' }}>{formatMoney(tx.amount)}</span></strong>
+                <span style={{ fontSize: '0.85rem' }}>{formatDate(tx.date)} - {tx.notes}</span>
+              </div>
+              <div className="table-side">
+                <button type="button" className="danger-button small" onClick={() => requestTransactionDelete(tx.id)}>
+                  حذف
+                </button>
+              </div>
+            </article>
+          ))}
+          {activeCustodyTransactions.length === 0 && <p style={{ textAlign: 'center', color: '#666' }}>لا توجد حركات مسجلة</p>}
+        </div>
+      </Modal>
 
       {/* Global delete confirmation modal */}
       <ConfirmModal
