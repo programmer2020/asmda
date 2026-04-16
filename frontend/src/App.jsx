@@ -1,7 +1,25 @@
 import { useEffect, useState } from 'react';
 
 const apiBase = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '');
-const views = ['dashboard', 'sales', 'credit-sales', 'returns', 'price-list', 'custodies', 'statement'];
+const views = [
+  'dashboard',
+  'final-product-store',
+  'raw-materials-packaging-store',
+  'rep-sub-stores',
+  'financial-manager-custody',
+  'raw-materials-purchases',
+  'machine-maintenance-purchases',
+  'misc-purchases',
+  'payroll-advances',
+  'sales',
+  'checks',
+  'returns',
+  'customer-payment-alerts',
+  'credit-sales',
+  'price-list',
+  'custodies',
+  'statement'
+];
 
 const navigation = [
   {
@@ -10,9 +28,64 @@ const navigation = [
     helper: 'الملخص العام'
   },
   {
+    id: 'final-product-store',
+    label: 'مخزن منتج نهائي',
+    helper: 'متابعة أرصدة المنتج النهائي'
+  },
+  {
+    id: 'raw-materials-packaging-store',
+    label: 'مخزن خامات وتعبئة وتغليف',
+    helper: 'إدارة خامات التشغيل والتغليف'
+  },
+  {
+    id: 'rep-sub-stores',
+    label: 'مخازن فرعية للمناديب',
+    helper: 'متابعة العهد والمخزون لدى المناديب'
+  },
+  {
+    id: 'financial-manager-custody',
+    label: 'عهدة المدير المالي',
+    helper: 'توزيع عهد الموظفين من عهدة المدير المالي'
+  },
+  {
+    id: 'raw-materials-purchases',
+    label: 'مشتريات خامات',
+    helper: 'تسجيل ومراجعة مشتريات الخامات'
+  },
+  {
+    id: 'machine-maintenance-purchases',
+    label: 'مشتريات صيانة مكن',
+    helper: 'متابعة تكاليف الصيانة وقطع الغيار'
+  },
+  {
+    id: 'misc-purchases',
+    label: 'مشتريات نثرية',
+    helper: 'إدارة المصروفات النثرية اليومية'
+  },
+  {
+    id: 'payroll-advances',
+    label: 'رواتب وسلف',
+    helper: 'متابعة الرواتب والسلف الشهرية'
+  },
+  {
     id: 'sales',
-    label: 'المبيعات',
-    helper: 'إدارة البيع النقدي'
+    label: 'فاتورة مبيعات',
+    helper: 'إدارة فواتير البيع النقدي'
+  },
+  {
+    id: 'checks',
+    label: 'تحصيل',
+    helper: 'إدارة التحصيل ومواعيد الشيكات'
+  },
+  {
+    id: 'returns',
+    label: 'مرتجع يتم رده لمخزن المندوب المسؤول',
+    helper: 'إدارة المرتجعات وإثبات الإرجاع'
+  },
+  {
+    id: 'customer-payment-alerts',
+    label: 'تنبيه بمواعيد الدفع الخاصة بالعملاء',
+    helper: 'متابعة تنبيهات الاستحقاق والتحصيل'
   },
   {
     id: 'credit-sales',
@@ -20,13 +93,8 @@ const navigation = [
     helper: 'إدارة التحصيل والاستحقاق'
   },
   {
-    id: 'returns',
-    label: 'المرتجعات',
-    helper: 'إدارة البضائع المرتجعة'
-  },
-  {
     id: 'price-list',
-    label: 'قائمة الأسعار',
+    label: 'قائمة اسعار',
     helper: 'إدارة المنتجات وتسعيرها'
   },
   {
@@ -41,12 +109,52 @@ const navigation = [
   }
 ];
 
+const placeholderModuleConfig = {
+  'final-product-store': {
+    title: 'مخزن منتج نهائي',
+    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بحركات الإضافة والصرف وجرد المخزون النهائي.'
+  },
+  'raw-materials-packaging-store': {
+    title: 'مخزن خامات وتعبئة وتغليف',
+    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بأذون صرف وإضافة الخامات ومواد التعبئة والتغليف.'
+  },
+  'rep-sub-stores': {
+    title: 'مخازن فرعية للمناديب',
+    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بعهدة كل مندوب وحركة التسليم والاسترداد.'
+  },
+  'financial-manager-custody': {
+    title: 'عهدة المدير المالي',
+    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بسجل عهد الموظفين الصادرة من عهدة المدير المالي.'
+  },
+  'raw-materials-purchases': {
+    title: 'مشتريات خامات',
+    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بأوامر الشراء وفواتير الموردين للخامات.'
+  },
+  'machine-maintenance-purchases': {
+    title: 'مشتريات صيانة مكن',
+    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بمشتريات الصيانة وقطع غيار خطوط الإنتاج.'
+  },
+  'misc-purchases': {
+    title: 'مشتريات نثرية',
+    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بالمصروفات النثرية وسندات الصرف.'
+  },
+  'payroll-advances': {
+    title: 'رواتب وسلف',
+    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بمسير الرواتب وحركة السلف وتسوياتها.'
+  },
+  'customer-payment-alerts': {
+    title: 'تنبيه بمواعيد الدفع الخاصة بالعملاء',
+    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بتنبيهات الاستحقاق والتنبيهات الآلية للعملاء.'
+  }
+};
+
 const salesStatuses = ['جديدة', 'قيد التنفيذ', 'مكتملة'];
 const creditStatuses = ['مستحقة', 'مسدد جزئيا', 'متأخرة', 'مسددة'];
 const returnStatuses = ['قيد المراجعة', 'مستلمة', 'تم التعويض', 'مرفوضة'];
 const custodyStatuses = ['نشطة', 'مغلقة'];
 const custodyTypes = ['نقدية', 'عينية'];
 const transactionTypes = ['صرف', 'استعاضة', 'تسوية', 'إرجاع عهدة'];
+const checkStatuses = ['معلق', 'محصّل', 'مرتجع'];
 
 const initialDashboard = {
   meta: null,
@@ -86,6 +194,21 @@ const initialStatement = {
   customerName: '',
   summary: [],
   entries: []
+};
+
+const initialChecks = {
+  overview: [],
+  items: []
+};
+
+const initialCheckForm = {
+  customerName: '',
+  checkNumber: '',
+  bankName: '',
+  amount: '',
+  collectionDate: '',
+  status: 'معلق',
+  notes: ''
 };
 
 const initialSalesForm = {
@@ -186,6 +309,47 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function getTodayLocalDateKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getLoggedInEmail() {
+  const fallbackEmail = 'user@example.com';
+
+  if (typeof window === 'undefined') {
+    return fallbackEmail;
+  }
+
+  const directKeys = ['userEmail', 'email', 'loginEmail', 'authEmail', 'currentUserEmail'];
+  for (const key of directKeys) {
+    const value = window.localStorage.getItem(key);
+    if (value && value.includes('@')) {
+      return value;
+    }
+  }
+
+  const objectKeys = ['user', 'currentUser', 'authUser'];
+  for (const key of objectKeys) {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) continue;
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.email && parsed.email.includes('@')) {
+        return parsed.email;
+      }
+    } catch {
+      // Ignore invalid JSON values in storage and continue fallback search.
+    }
+  }
+
+  return fallbackEmail;
+}
+
 function getDashboardTone(tone) {
   if (tone === 'alert') {
     return 'danger';
@@ -220,6 +384,12 @@ function getStatusTone(status) {
   }
 
   return 'info';
+}
+
+function getCheckStatusTone(status) {
+  if (status === 'محصّل') return 'success';
+  if (status === 'مرتجع') return 'danger';
+  return 'warning';
 }
 
 async function fetchJson(url, options = {}) {
@@ -307,6 +477,22 @@ function SummaryCards({ items }) {
           <span className={`summary-helper ${getDashboardTone(item.tone)}`}>{item.helper}</span>
         </article>
       ))}
+    </section>
+  );
+}
+
+function PlaceholderModuleView({ title, description }) {
+  return (
+    <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
+      <article className="card panel-card" style={{ padding: '28px' }}>
+        <div className="section-head">
+          <div>
+            <p className="eyebrow">صفحة جديدة</p>
+            <h3>{title}</h3>
+          </div>
+        </div>
+        <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.8 }}>{description}</p>
+      </article>
     </section>
   );
 }
@@ -1029,8 +1215,7 @@ function CustodiesView({
   onEdit,
   onDelete,
   onManageTransactions
-}) {
-  return (
+}) {  return (
     <>
       <SummaryCards items={custodies.overview} />
 
@@ -1140,6 +1325,175 @@ function CustodiesView({
   );
 }
 
+function ChecksView({
+  checks,
+  form,
+  editingId,
+  saving,
+  isFormOpen,
+  onOpenForm,
+  onCloseForm,
+  onChange,
+  onSubmit,
+  onEdit,
+  onDelete
+}) {
+  const today = getTodayLocalDateKey();
+  const todayChecks = checks.items.filter(
+    (item) => item.collectionDate === today && item.status === 'معلق'
+  );
+
+  return (
+    <>
+      <SummaryCards items={checks.overview} />
+
+      {todayChecks.length > 0 && (
+        <section className="checks-today-banner">
+          <div className="checks-today-icon">🔔</div>
+          <div className="checks-today-content">
+            <strong>شيكات موعد تحصيلها اليوم — {new Intl.DateTimeFormat('ar-EG', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date())}</strong>
+            <p>يوجد <strong>{todayChecks.length}</strong> شيك يستحق التحصيل اليوم بإجمالي&nbsp;
+              {new Intl.NumberFormat('ar-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 }).format(
+                todayChecks.reduce((s, c) => s + c.amount, 0)
+              )}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {todayChecks.length > 0 && (
+        <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '0' }}>
+          <article className="card table-card checks-today-card">
+            <div className="table-actions-header">
+              <div>
+                <p className="eyebrow">تحصيل اليوم</p>
+                <h3>الشيكات المستحقة اليوم</h3>
+              </div>
+            </div>
+            <div className="table-list">
+              {todayChecks.map((item) => (
+                <article key={item.id} className="table-row checks-due-row">
+                  <div className="table-main">
+                    <div className="record-top">
+                      <strong>{item.customerName}</strong>
+                      <span className="status-chip danger">تحصيل اليوم</span>
+                    </div>
+                    <p>{item.bankName ? `بنك: ${item.bankName}` : ''}{item.checkNumber ? ` — شيك رقم: ${item.checkNumber}` : ''}</p>
+                  </div>
+                  <div className="table-side">
+                    <strong>{formatMoney(item.amount)}</strong>
+                    <div className="row-actions">
+                      <button type="button" className="primary-button small" onClick={() => onEdit(item)}>
+                        تحديث الحالة
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </article>
+        </section>
+      )}
+
+      <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
+        <article className="card table-card">
+          <div className="table-actions-header">
+            <div>
+              <p className="eyebrow">سجل الشيكات</p>
+              <h3>إدارة الشيكات ومواعيد التحصيل</h3>
+            </div>
+            <button type="button" className="primary-button" onClick={onOpenForm}>
+              إضافة شيك
+            </button>
+          </div>
+
+          <div className="table-list">
+            {checks.items.map((item) => {
+              const isToday = item.collectionDate === today && item.status === 'معلق';
+              return (
+                <article key={item.id} className={`table-row${isToday ? ' checks-highlight' : ''}`}>
+                  <div className="table-main">
+                    <div className="record-top">
+                      <strong>{item.customerName}</strong>
+                      <span className={`status-chip ${getCheckStatusTone(item.status)}`}>{item.status}</span>
+                      {isToday && <span className="status-chip danger">اليوم</span>}
+                    </div>
+                    <p>
+                      {item.bankName ? `${item.bankName}` : '—'}
+                      {item.checkNumber ? ` · شيك رقم ${item.checkNumber}` : ''}
+                    </p>
+                    <small>تاريخ التحصيل: {formatDate(item.collectionDate)}</small>
+                  </div>
+                  <div className="table-side">
+                    <strong>{formatMoney(item.amount)}</strong>
+                    <div className="row-actions">
+                      <button type="button" className="ghost-button small" onClick={() => onEdit(item)}>
+                        تعديل
+                      </button>
+                      <button type="button" className="danger-button small" onClick={() => onDelete(item.id)}>
+                        حذف
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+            {checks.items.length === 0 && (
+              <p className="empty-notice">لا توجد شيكات مسجلة بعد.</p>
+            )}
+          </div>
+        </article>
+      </section>
+
+      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل الشيك' : 'إضافة شيك جديد'}>
+        <form className="form-grid" onSubmit={onSubmit}>
+          <label>
+            <span>اسم العميل / الساحب</span>
+            <input name="customerName" value={form.customerName} onChange={onChange} required />
+          </label>
+          <label>
+            <span>رقم الشيك</span>
+            <input name="checkNumber" value={form.checkNumber} onChange={onChange} placeholder="اختياري" />
+          </label>
+          <label>
+            <span>اسم البنك</span>
+            <input name="bankName" value={form.bankName} onChange={onChange} placeholder="مثال: بنك مصر" />
+          </label>
+          <label>
+            <span>القيمة</span>
+            <input name="amount" type="number" min="0" step="0.01" value={form.amount} onChange={onChange} required />
+          </label>
+          <label>
+            <span>تاريخ التحصيل</span>
+            <input name="collectionDate" type="date" value={form.collectionDate} onChange={onChange} required />
+          </label>
+          <label>
+            <span>الحالة</span>
+            <select name="status" value={form.status} onChange={onChange}>
+              {checkStatuses.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+          <label className="full-width">
+            <span>ملاحظات</span>
+            <textarea name="notes" rows="3" value={form.notes} onChange={onChange} />
+          </label>
+
+          <div className="form-actions full-width" style={{ marginTop: '16px' }}>
+            <button type="submit" className="primary-button" disabled={saving}>
+              {saving ? 'جارٍ الحفظ...' : editingId ? 'حفظ التعديل' : 'إضافة الشيك'}
+            </button>
+            <button type="button" className="ghost-button" onClick={onCloseForm}>
+              إلغاء
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  );
+}
+
 export default function App() {
   const [activeView, setActiveView] = useState(getInitialView);
   const [dashboard, setDashboard] = useState(initialDashboard);
@@ -1148,11 +1502,13 @@ export default function App() {
   const [returns, setReturns] = useState(initialReturns);
   const [priceList, setPriceList] = useState(initialPriceList);
   const [custodies, setCustodies] = useState(initialCustodies);
+  const [checks, setChecks] = useState(initialChecks);
   const [statement, setStatement] = useState(initialStatement);
   const [salesForm, setSalesForm] = useState(initialSalesForm);
   const [creditForm, setCreditForm] = useState(initialCreditForm);
   const [returnsForm, setReturnsForm] = useState(initialReturnsForm);
   const [priceListForm, setPriceListForm] = useState(initialPriceListForm);
+  const [checkForm, setCheckForm] = useState(initialCheckForm);
   const [custodyForm, setCustodyForm] = useState(initialCustodyForm);
   const [transactionForm, setTransactionForm] = useState(initialTransactionForm);
   const [salesEditingId, setSalesEditingId] = useState('');
@@ -1169,6 +1525,8 @@ export default function App() {
   const [priceListSaving, setPriceListSaving] = useState(false);
   const [custodiesSaving, setCustodiesSaving] = useState(false);
   const [transactionSaving, setTransactionSaving] = useState(false);
+  const [checkSaving, setCheckSaving] = useState(false);
+  const [checkEditingId, setCheckEditingId] = useState('');
 
   // Modal visibility state
   const [salesFormOpen, setSalesFormOpen] = useState(false);
@@ -1176,11 +1534,16 @@ export default function App() {
   const [returnsFormOpen, setReturnsFormOpen] = useState(false);
   const [priceListFormOpen, setPriceListFormOpen] = useState(false);
   const [custodyFormOpen, setCustodyFormOpen] = useState(false);
+  const [checkFormOpen, setCheckFormOpen] = useState(false);
   const [transactionsModalOpen, setTransactionsModalOpen] = useState(false);
   const [activeCustodyId, setActiveCustodyId] = useState(null);
   const [activeCustodyTransactions, setActiveCustodyTransactions] = useState([]);
 
-  // Delete confirmation state: { type: 'sales'|'credit'|'returns'|'price-list'|'custodies'|'transaction', id }
+  // Notification: checks due today
+  const [checkNotification, setCheckNotification] = useState(null);
+  const [notificationDismissed, setNotificationDismissed] = useState(false);
+
+  // Delete confirmation state: { type: 'sales'|'credit'|'returns'|'price-list'|'custodies'|'transaction'|'check', id }
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
@@ -1193,13 +1556,14 @@ export default function App() {
   }, []);
 
   async function loadWorkspace() {
-    const [dashboardData, salesData, creditData, returnsData, priceListData, custodiesData] = await Promise.all([
+    const [dashboardData, salesData, creditData, returnsData, priceListData, custodiesData, checksData] = await Promise.all([
       fetchJson(buildUrl('/dashboard')),
       fetchJson(buildUrl('/sales')),
       fetchJson(buildUrl('/credit-sales')),
       fetchJson(buildUrl('/returns')),
       fetchJson(buildUrl('/price-list')),
-      fetchJson(buildUrl('/custodies'))
+      fetchJson(buildUrl('/custodies')),
+      fetchJson(buildUrl('/checks'))
     ]);
 
     setDashboard(dashboardData);
@@ -1208,6 +1572,22 @@ export default function App() {
     setReturns(returnsData);
     setPriceList(priceListData);
     setCustodies(custodiesData);
+    setChecks(checksData);
+
+    // Update notification for today's pending checks
+    const today = getTodayLocalDateKey();
+    const todayPending = checksData.items.filter(
+      (item) => item.collectionDate === today && item.status === 'معلق'
+    );
+    if (todayPending.length > 0) {
+      setCheckNotification({
+        count: todayPending.length,
+        total: todayPending.reduce((s, c) => s + c.amount, 0)
+      });
+      setNotificationDismissed(false);
+    } else {
+      setCheckNotification(null);
+    }
   }
 
   useEffect(() => {
@@ -1418,6 +1798,101 @@ export default function App() {
 
     setStatement(buildCustomerStatement(statement.customerName, sales, creditSales, returns));
   }, [sales, creditSales, returns]);
+
+  // Periodic notification refresh every 5 minutes
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const checksData = await fetchJson(buildUrl('/checks'));
+        setChecks(checksData);
+        const today = getTodayLocalDateKey();
+        const todayPending = checksData.items.filter(
+          (item) => item.collectionDate === today && item.status === 'معلق'
+        );
+        if (todayPending.length > 0) {
+          setCheckNotification({ count: todayPending.length, total: todayPending.reduce((s, c) => s + c.amount, 0) });
+          setNotificationDismissed(false);
+        } else {
+          setCheckNotification(null);
+        }
+      } catch {
+        // silently ignore background refresh errors
+      }
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ── Checks ─────────────────────────────────────────────
+  function handleCheckInputChange(event) {
+    const { name, value } = event.target;
+    setCheckForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function openCheckForm() {
+    setCheckEditingId('');
+    setCheckForm(initialCheckForm);
+    setCheckFormOpen(true);
+  }
+
+  function startCheckEdit(item) {
+    setCheckEditingId(item.id);
+    setCheckForm({
+      customerName: item.customerName,
+      checkNumber: item.checkNumber,
+      bankName: item.bankName,
+      amount: String(item.amount),
+      collectionDate: item.collectionDate,
+      status: item.status,
+      notes: item.notes ?? ''
+    });
+    setCheckFormOpen(true);
+  }
+
+  function closeCheckForm() {
+    setCheckFormOpen(false);
+    setCheckEditingId('');
+    setCheckForm(initialCheckForm);
+  }
+
+  async function handleCheckSubmit(event) {
+    event.preventDefault();
+    try {
+      setCheckSaving(true);
+      setError('');
+      setNotice('');
+      const payload = { ...checkForm, amount: Number(checkForm.amount) };
+      await fetchJson(
+        checkEditingId ? buildUrl(`/checks/${checkEditingId}`) : buildUrl('/checks'),
+        { method: checkEditingId ? 'PUT' : 'POST', body: JSON.stringify(payload) }
+      );
+      await loadWorkspace();
+      const msg = checkEditingId ? 'تم تعديل الشيك بنجاح.' : 'تمت إضافة الشيك بنجاح.';
+      closeCheckForm();
+      setNotice(msg);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setCheckSaving(false);
+    }
+  }
+
+  function requestCheckDelete(id) {
+    setDeleteTarget({ type: 'check', id });
+  }
+
+  async function confirmCheckDelete() {
+    const id = deleteTarget.id;
+    setDeleteTarget(null);
+    try {
+      setError('');
+      setNotice('');
+      await fetchJson(buildUrl(`/checks/${id}`), { method: 'DELETE' });
+      await loadWorkspace();
+      setNotice('تم حذف الشيك بنجاح.');
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
 
   // ── Sales ──────────────────────────────────────────────
   function handleSalesInputChange(event) {
@@ -1869,6 +2344,7 @@ export default function App() {
     else if (deleteTarget.type === 'price-list') confirmPriceListDelete();
     else if (deleteTarget.type === 'custodies') confirmCustodyDelete();
     else if (deleteTarget.type === 'transaction') confirmTransactionDelete();
+    else if (deleteTarget.type === 'check') confirmCheckDelete();
   }
 
   const deleteMessages = {
@@ -1877,15 +2353,58 @@ export default function App() {
     returns: 'هل أنت متأكد من حذف هذا المرتجع؟ لا يمكن التراجع عن هذا الإجراء.',
     'price-list': 'هل أنت متأكد من حذف هذا المنتج من قائمة الأسعار؟ لا يمكن التراجع عن هذا الإجراء.',
     custodies: 'هل أنت متأكد من حذف العهدة؟ لا يمكن التراجع، سيتم حذف جميع الحركات المتعلقة.',
-    transaction: 'هل أنت متأكد من حذف هذه الحركة؟ سيتم استرجاع رصيد العهدة كالمعاملة العكسية.'
+    transaction: 'هل أنت متأكد من حذف هذه الحركة؟ سيتم استرجاع رصيد العهدة كالمعاملة العكسية.',
+    check: 'هل أنت متأكد من حذف هذا الشيك؟ لا يمكن التراجع عن هذا الإجراء.'
   };
 
   const title = navigation.find((item) => item.id === activeView)?.label ?? 'لوحة التحكم';
+  const placeholderModule = placeholderModuleConfig[activeView] ?? null;
+  const loggedInEmail = getLoggedInEmail();
+  const avatarInitial = loggedInEmail.charAt(0).toUpperCase();
+  const notificationsCount = checkNotification && !notificationDismissed ? checkNotification.count : 0;
 
   return (
     <div className="app-shell" dir="rtl">
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
+
+      <header className="workspace-topbar card">
+        <div>
+          <p className="eyebrow">الواجهة الحالية</p>
+          <h2>{title}</h2>
+        </div>
+        <div className="topbar-actions">
+          <button
+            type="button"
+            className={`notification-icon-button ${notificationsCount > 0 ? 'has-alert' : ''}`}
+            onClick={() => {
+              navigateTo('checks');
+              setNotificationDismissed(true);
+            }}
+            aria-label="تنبيهات التحصيل"
+            title={notificationsCount > 0 ? `${notificationsCount} تنبيه جديد` : 'لا توجد تنبيهات جديدة'}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3a5 5 0 0 0-5 5v1.28c0 .9-.31 1.77-.88 2.46L4.5 13.7a1 1 0 0 0 .77 1.63h13.46a1 1 0 0 0 .77-1.63l-1.62-1.96A3.98 3.98 0 0 1 17 9.28V8a5 5 0 0 0-5-5Zm0 18a3 3 0 0 0 2.83-2H9.17A3 3 0 0 0 12 21Z" />
+            </svg>
+            {notificationsCount > 0 ? (
+              <span className="notification-count">{notificationsCount > 99 ? '99+' : notificationsCount}</span>
+            ) : null}
+          </button>
+
+          <div className="user-profile-chip" title={loggedInEmail}>
+            <div className="user-profile-meta">
+              <span>الحساب الحالي</span>
+              <strong>{loggedInEmail}</strong>
+            </div>
+            <div className="user-avatar" aria-hidden="true">{avatarInitial}</div>
+          </div>
+
+          <a className="ghost-button" href="http://localhost:5001/api-docs" target="_blank" rel="noreferrer">
+            Swagger
+          </a>
+        </div>
+      </header>
 
       <aside className="sidebar card">
         <nav className="sidebar-nav">
@@ -1896,7 +2415,12 @@ export default function App() {
               href={`#${item.id}`}
               onClick={() => navigateTo(item.id)}
             >
-              <strong>{item.label}</strong>
+              <strong>
+                {item.label}
+                {item.id === 'checks' && checkNotification && !notificationDismissed && (
+                  <span className="nav-badge">{checkNotification.count}</span>
+                )}
+              </strong>
               <span>{item.helper}</span>
             </a>
           ))}
@@ -1904,18 +2428,6 @@ export default function App() {
       </aside>
 
       <main className="workspace">
-        <header className="workspace-topbar">
-          <div>
-            <p className="eyebrow">الواجهة الحالية</p>
-            <h2>{title}</h2>
-          </div>
-          <div className="topbar-actions">
-            <a className="ghost-button" href="http://localhost:5001/api-docs" target="_blank" rel="noreferrer">
-              Swagger
-            </a>
-          </div>
-        </header>
-
         {notice ? <section className="notice success">{notice}</section> : null}
         {loading ? <section className="notice">جارٍ تحميل بيانات النظام...</section> : null}
         {error ? <section className="notice error">{error}</section> : null}
@@ -2012,6 +2524,26 @@ export default function App() {
             onCustomerChange={handleStatementCustomerChange}
             onPrint={handleStatementPrint}
           />
+        ) : null}
+
+        {!loading && !error && activeView === 'checks' ? (
+          <ChecksView
+            checks={checks}
+            form={checkForm}
+            editingId={checkEditingId}
+            saving={checkSaving}
+            isFormOpen={checkFormOpen}
+            onOpenForm={openCheckForm}
+            onCloseForm={closeCheckForm}
+            onChange={handleCheckInputChange}
+            onSubmit={handleCheckSubmit}
+            onEdit={startCheckEdit}
+            onDelete={requestCheckDelete}
+          />
+        ) : null}
+
+        {!loading && !error && placeholderModule ? (
+          <PlaceholderModuleView title={placeholderModule.title} description={placeholderModule.description} />
         ) : null}
       </main>
 

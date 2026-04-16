@@ -69,3 +69,15 @@ CREATE TABLE IF NOT EXISTS custody_transactions (
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS checks (
+  id VARCHAR(50) PRIMARY KEY,
+  customer_name VARCHAR(255) NOT NULL,
+  check_number VARCHAR(100),
+  bank_name VARCHAR(255),
+  amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  collection_date DATE,
+  status VARCHAR(50) DEFAULT 'معلق',
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

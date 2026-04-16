@@ -26,7 +26,11 @@ import {
   deleteCustodyRecord,
   getCustodyTransactions,
   createCustodyTransaction,
-  deleteCustodyTransaction
+  deleteCustodyTransaction,
+  getChecksData,
+  createCheckRecord,
+  updateCheckRecord,
+  deleteCheckRecord
 } from './data/erbStore.js';
 import { getDatabaseStatus, safeQuery } from './db.js';
 import { createSwaggerSpec } from './swagger.js';
@@ -482,6 +486,68 @@ app.delete('/api/custodies/:id/transactions/:txId', async (request, response) =>
     const deleted = await deleteCustodyTransaction(request.params.txId);
     if (!deleted) {
       response.status(404).json({ message: 'الحركة غير موجودة.' });
+      return;
+    }
+    response.status(204).send();
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+// ── Checks ────────────────────────────────────────────────────────────────────
+
+function validateCheckPayload(body) {
+  if (!body.customerName) return 'يرجى إدخال اسم العميل.';
+  if (Number(body.amount) <= 0) return 'قيمة الشيك يجب أن تكون أكبر من صفر.';
+  if (!body.collectionDate) return 'يرجى تحديد تاريخ التحصيل.';
+  return '';
+}
+
+app.get('/api/checks', async (_request, response) => {
+  try {
+    response.json(await getChecksData());
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/checks', async (request, response) => {
+  const validationMessage = validateCheckPayload(request.body);
+  if (validationMessage) {
+    response.status(400).json({ message: validationMessage });
+    return;
+  }
+  try {
+    const created = await createCheckRecord(request.body);
+    response.status(201).json(created);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.put('/api/checks/:id', async (request, response) => {
+  const validationMessage = validateCheckPayload(request.body);
+  if (validationMessage) {
+    response.status(400).json({ message: validationMessage });
+    return;
+  }
+  try {
+    const updated = await updateCheckRecord(request.params.id, request.body);
+    if (!updated) {
+      response.status(404).json({ message: 'الشيك غير موجود.' });
+      return;
+    }
+    response.json(updated);
+  } catch (err) {
+    response.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/checks/:id', async (request, response) => {
+  try {
+    const deleted = await deleteCheckRecord(request.params.id);
+    if (!deleted) {
+      response.status(404).json({ message: 'الشيك غير موجود.' });
       return;
     }
     response.status(204).send();

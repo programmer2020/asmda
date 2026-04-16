@@ -559,6 +559,17 @@ function mapCustodyTransaction(row) {
   };
 }
 
+function toLocalDateKey(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value.slice(0, 10);
+
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export async function getCustodiesData() {
   const result = await query('SELECT * FROM custodies ORDER BY created_at DESC');
   const items = result.rows.map(mapCustodyItem);
@@ -726,6 +737,127 @@ export async function deleteCustodyTransaction(id) {
   }
 
   const result = await query('DELETE FROM custody_transactions WHERE id = $1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Checks ────────────────────────────────────────────────────────────────────
+
+function mapCheck(row) {
+  return {
+    id: row.id,
+    customerName: row.customer_name,
+    checkNumber: row.check_number || '',
+    bankName: row.bank_name || '',
+    amount: Number(row.amount),
+    collectionDate: toLocalDateKey(row.collection_date),
+    status: row.status,
+    notes: row.notes || ''
+  };
+}
+
+export async function getChecksData() {
+  const result = await query('SELECT * FROM checks ORDER BY collection_date ASC, created_at DESC');
+  const items = result.rows.map(mapCheck);
+
+  const today = toLocalDateKey(new Date());
+  const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+  const pendingCount = items.filter((item) => item.status === 'معلق').length;
+  const todayCount = items.filter((item) => item.collectionDate === today && item.status === 'معلق').length;
+  const collectedAmount = items
+    .filter((item) => item.status === 'محصّل')
+    .reduce((sum, item) => sum + item.amount, 0);
+
+  const overview = [
+    {
+      id: 'checks-total',
+      label: 'إجمالي قيمة الشيكات',
+      value: totalAmount,
+      type: 'currency',
+      helper: 'قيمة جميع الشيكات',
+      tone: 'accent'
+    },
+    {
+      id: 'checks-pending',
+      label: 'شيكات معلقة',
+      value: pendingCount,
+      type: 'number',
+      helper: 'تنتظر التحصيل',
+      tone: 'warning'
+    },
+    {
+      id: 'checks-today',
+      label: 'تحصيل اليوم',
+      value: todayCount,
+      type: 'number',
+      helper: 'موعد تحصيلها اليوم',
+      tone: todayCount > 0 ? 'alert' : 'neutral'
+    },
+    {
+      id: 'checks-collected',
+      label: 'إجمالي المحصّل',
+      value: collectedAmount,
+      type: 'currency',
+      helper: 'شيكات تم تحصيلها',
+      tone: 'calm'
+    }
+  ];
+
+  return { overview, items };
+}
+
+export async function createCheckRecord(payload) {
+  const id = await nextId('CHK', 'checks');
+
+  const text = `
+    INSERT INTO checks
+    (id, customer_name, check_number, bank_name, amount, collection_date, status, notes)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *
+  `;
+  const values = [
+    id,
+    payload.customerName || '',
+    payload.checkNumber || '',
+    payload.bankName || '',
+    Number(payload.amount || 0),
+    payload.collectionDate || null,
+    payload.status || 'معلق',
+    payload.notes || ''
+  ];
+
+  const result = await query(text, values);
+  return mapCheck(result.rows[0]);
+}
+
+export async function updateCheckRecord(id, payload) {
+  const text = `
+    UPDATE checks SET
+      customer_name = COALESCE($2, customer_name),
+      check_number = COALESCE($3, check_number),
+      bank_name = COALESCE($4, bank_name),
+      amount = COALESCE($5, amount),
+      collection_date = COALESCE($6, collection_date),
+      status = COALESCE($7, status),
+      notes = COALESCE($8, notes)
+    WHERE id = $1 RETURNING *
+  `;
+  const values = [
+    id,
+    payload.customerName,
+    payload.checkNumber,
+    payload.bankName,
+    payload.amount !== undefined ? Number(payload.amount) : undefined,
+    payload.collectionDate,
+    payload.status,
+    payload.notes
+  ];
+
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapCheck(result.rows[0]);
+}
+
+export async function deleteCheckRecord(id) {
+  const result = await query('DELETE FROM checks WHERE id = $1 RETURNING id', [id]);
   return result.rowCount > 0;
 }
 

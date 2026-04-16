@@ -88,6 +88,10 @@ textarea {
   position: relative;
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-areas:
+    'topbar topbar'
+    'sidebar workspace';
+  align-items: start;
   gap: 24px;
   width: min(1420px, calc(100% - 32px));
   margin: 0 auto;
@@ -160,6 +164,7 @@ textarea {
 
 /* Sidebar Specifics */
 .sidebar {
+  grid-area: sidebar;
   position: sticky;
   top: 32px;
   align-self: start;
@@ -264,10 +269,12 @@ textarea {
 }
 
 .workspace {
+  grid-area: workspace;
   position: relative;
   z-index: 1;
   display: grid;
   gap: 20px;
+  align-content: start;
 }
 
 .workspace-topbar,
@@ -289,7 +296,111 @@ textarea {
 }
 
 .workspace-topbar {
-  padding: 8px 6px;
+  grid-area: topbar;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.topbar-actions {
+  margin-inline-start: auto;
+  flex-wrap: wrap;
+}
+
+.notification-icon-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(21, 128, 61, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #0f5132;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.notification-icon-button svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.notification-icon-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(16, 50, 36, 0.12);
+  border-color: rgba(21, 128, 61, 0.34);
+}
+
+.notification-icon-button.has-alert {
+  color: #ffffff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.35);
+  animation: bellPulse 2s ease-in-out infinite;
+}
+
+.notification-count {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: #111827;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.user-profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px 7px 7px;
+  border: 1px solid rgba(21, 128, 61, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 6px 18px rgba(16, 50, 36, 0.07);
+}
+
+.user-profile-meta {
+  display: grid;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+.user-profile-meta span {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.user-profile-meta strong {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: #0f5132;
+  direction: ltr;
+  text-align: left;
+}
+
+.user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #10b981, #047857);
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 800;
 }
 
 .workspace-topbar h2,
@@ -571,7 +682,8 @@ textarea {
 
 /* Statistics / Insights */
 .summary-grid {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .summary-card {
@@ -840,6 +952,10 @@ textarea {
 @media (max-width: 1180px) {
   .app-shell {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      'topbar'
+      'sidebar'
+      'workspace';
   }
 
   .sidebar {
@@ -878,6 +994,26 @@ textarea {
   .app-shell {
     width: min(100% - 24px, 1420px);
     padding: 24px 0 40px;
+  }
+
+  .workspace-topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .user-profile-chip {
+    flex: 1;
+    justify-content: space-between;
+  }
+
+  .user-profile-meta strong {
+    font-size: 0.8rem;
   }
 
   .statement-table {
@@ -1053,4 +1189,110 @@ textarea {
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(20px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Checks ──────────────────────────────────────────────────────────────── */
+
+.checks-notification-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  animation: bellPulse 2s ease-in-out infinite;
+}
+
+.checks-notification-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.45);
+}
+
+.checks-bell {
+  font-size: 1.1rem;
+  animation: bellShake 1.5s ease-in-out infinite;
+}
+
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0deg); }
+  10%, 30%, 50%, 70%, 90% { transform: rotate(-12deg); }
+  20%, 40%, 60%, 80% { transform: rotate(12deg); }
+}
+
+@keyframes bellPulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35); }
+  50% { box-shadow: 0 4px 24px rgba(239, 68, 68, 0.6); }
+}
+
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  background: var(--danger);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.checks-today-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 22px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05));
+  border: 2px solid rgba(239, 68, 68, 0.25);
+  border-radius: 16px;
+  margin-bottom: 20px;
+  animation: fadeIn 0.3s ease;
+}
+
+.checks-today-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.checks-today-content strong {
+  display: block;
+  font-size: 1rem;
+  color: var(--danger);
+  margin-bottom: 4px;
+}
+
+.checks-today-content p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.checks-today-card {
+  border: 2px solid rgba(239, 68, 68, 0.2);
+}
+
+.checks-due-row {
+  border-right: 4px solid var(--danger);
+}
+
+.checks-highlight {
+  border-right: 4px solid var(--danger);
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.empty-notice {
+  text-align: center;
+  color: var(--muted);
+  padding: 32px;
+  font-size: 0.95rem;
 }
