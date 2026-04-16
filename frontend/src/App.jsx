@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const apiBase = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '');
-const views = ['dashboard', 'sales', 'credit-sales', 'returns', 'price-list', 'custodies'];
+const views = ['dashboard', 'sales', 'credit-sales', 'returns', 'price-list', 'custodies', 'statement'];
 
 const navigation = [
   {
@@ -33,6 +33,11 @@ const navigation = [
     id: 'custodies',
     label: 'العهد',
     helper: 'إدارة العهد النقدية والعينية'
+  },
+  {
+    id: 'statement',
+    label: 'كشف حساب',
+    helper: 'استعراض حركة العميل ورصيده'
   }
 ];
 
@@ -75,6 +80,12 @@ const initialPriceList = {
 const initialCustodies = {
   overview: [],
   items: []
+};
+
+const initialStatement = {
+  customerName: '',
+  summary: [],
+  entries: []
 };
 
 const initialSalesForm = {
@@ -300,8 +311,142 @@ function SummaryCards({ items }) {
   );
 }
 
+function StatementView({
+  statement,
+  customers,
+  onCustomerChange,
+  onPrint
+}) {
+  return (
+    <>
+      <section className="dashboard-grid statement-layout" style={{ gridTemplateColumns: '340px minmax(0, 1fr)' }}>
+        <article className="card panel-card statement-sidebar">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">اختيار العميل</p>
+              <h3>تحميل كشف الحساب</h3>
+            </div>
+          </div>
+
+          <div className="statement-controls">
+            <label>
+              <span>اسم العميل</span>
+              <select value={statement.customerName} onChange={onCustomerChange}>
+                <option value="">اختر عميلًا</option>
+                {customers.map((customer) => (
+                  <option key={customer} value={customer}>
+                    {customer}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <button
+              type="button"
+              className="primary-button statement-print-button"
+              onClick={onPrint}
+              disabled={!statement.customerName}
+            >
+              طباعة الكشف
+            </button>
+
+            <div className="statement-help">
+              <strong>ملاحظة</strong>
+              <p>تم تعديل تنسيق الصفحة ليقترب من نموذج التقرير المرفق: عنوان علوي ثابت، اسم العميل أسفل العنوان، وجدول حركات بتنسيق تقريري.</p>
+            </div>
+          </div>
+        </article>
+
+        <article className="statement-report-paper">
+          <header className="statement-report-header">
+            <h1>Customer Detailed Sales Report</h1>
+            <h2>
+              <span>Customer :</span>
+              <strong>{statement.customerName || '........'}</strong>
+            </h2>
+          </header>
+
+          {statement.customerName ? (
+            <div className="statement-report-meta">
+              <span>عدد الحركات: {statement.entries.length}</span>
+              <span>تاريخ الإصدار: {formatDate(new Date().toISOString())}</span>
+              <span>الرصيد الحالي: {formatMoney(statement.summary.find((item) => item.id === 'statement-balance')?.value ?? 0)}</span>
+            </div>
+          ) : null}
+
+          {statement.customerName ? (
+            <div className="statement-table-wrapper statement-report-table-wrapper">
+              <table className="statement-table statement-report-table">
+                <thead>
+                  <tr>
+                    <th>Adl</th>
+                    <th>Discount</th>
+                    <th>الرصيد</th>
+                    <th>مدين</th>
+                    <th>دائن</th>
+                    <th>صافي الإجمالي</th>
+                    <th>المجموع</th>
+                    <th>سعر</th>
+                    <th>كمية</th>
+                    <th>وصف</th>
+                    <th>Delivery Address</th>
+                    <th>نوع المعاملة</th>
+                    <th>رقم المرجع</th>
+                    <th>مسلسل</th>
+                    <th>تاريخ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statement.entries.map((entry, index) => (
+                    <tr key={entry.id}>
+                      <td>{entry.adjustment > 0 ? new Intl.NumberFormat('en-US').format(entry.adjustment) : '0'}</td>
+                      <td>{entry.discount > 0 ? new Intl.NumberFormat('en-US').format(entry.discount) : '0'}</td>
+                      <td className="statement-balance-cell">
+                        <strong>{new Intl.NumberFormat('en-US').format(entry.balance)}</strong>
+                        <span>{entry.balance >= 0 ? 'DR' : 'CR'}</span>
+                      </td>
+                      <td>{entry.debit > 0 ? new Intl.NumberFormat('en-US').format(entry.debit) : '0'}</td>
+                      <td>{entry.credit > 0 ? new Intl.NumberFormat('en-US').format(entry.credit) : '0'}</td>
+                      <td>{new Intl.NumberFormat('en-US').format(entry.netTotal)}</td>
+                      <td>{new Intl.NumberFormat('en-US').format(entry.total)}</td>
+                      <td>{entry.price > 0 ? new Intl.NumberFormat('en-US').format(entry.price) : ''}</td>
+                      <td>{entry.quantity || ''}</td>
+                      <td>
+                        <div className="statement-cell-title">{entry.description}</div>
+                        {entry.notes ? <div className="statement-cell-note">{entry.notes}</div> : null}
+                      </td>
+                      <td>{entry.deliveryAddress || ''}</td>
+                      <td>{entry.transactionType}</td>
+                      <td>{entry.reference || ''}</td>
+                      <td>{entry.sequence || index + 1}</td>
+                      <td>{entry.reportDate}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <section className="notice statement-empty statement-empty-paper">
+              اختر اسم عميل من القائمة ليتم تحميل كشف الحساب مباشرة.
+            </section>
+          )}
+        </article>
+      </section>
+    </>
+  );
+}
+
 function DashboardView({ dashboard, onNavigate }) {
   const { meta, brand, summary, alerts, recentSales, recentCreditSales } = dashboard;
+  const quickLinks = navigation.filter((item) => item.id !== 'dashboard');
+  const heroButtonLabels = {
+    sales: brand?.primaryAction ?? 'فتح صفحة المبيعات',
+    'credit-sales': brand?.secondaryAction ?? 'فتح صفحة مبيعات الآجل',
+    returns: 'إدارة المرتجعات',
+    'price-list': 'فتح قائمة الأسعار',
+    custodies: 'فتح صفحة العهد',
+    statement: 'فتح كشف حساب'
+  };
 
   return (
     <>
@@ -314,15 +459,16 @@ function DashboardView({ dashboard, onNavigate }) {
           </p>
 
           <div className="hero-actions">
-            <button type="button" className="primary-button" onClick={() => onNavigate('sales')}>
-              {brand?.primaryAction ?? 'فتح صفحة المبيعات'}
-            </button>
-            <button type="button" className="ghost-button" onClick={() => onNavigate('credit-sales')}>
-              {brand?.secondaryAction ?? 'فتح صفحة مبيعات الآجل'}
-            </button>
-            <button type="button" className="ghost-button" onClick={() => onNavigate('returns')}>
-              إدارة المرتجعات
-            </button>
+            {quickLinks.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={item.id === 'sales' ? 'primary-button' : 'ghost-button'}
+                onClick={() => onNavigate(item.id)}
+              >
+                {heroButtonLabels[item.id] ?? item.label}
+              </button>
+            ))}
           </div>
 
           <div className="hero-runtime">
@@ -1002,6 +1148,7 @@ export default function App() {
   const [returns, setReturns] = useState(initialReturns);
   const [priceList, setPriceList] = useState(initialPriceList);
   const [custodies, setCustodies] = useState(initialCustodies);
+  const [statement, setStatement] = useState(initialStatement);
   const [salesForm, setSalesForm] = useState(initialSalesForm);
   const [creditForm, setCreditForm] = useState(initialCreditForm);
   const [returnsForm, setReturnsForm] = useState(initialReturnsForm);
@@ -1093,6 +1240,184 @@ export default function App() {
     setActiveView(view);
     window.location.hash = view;
   }
+
+  function buildCustomerStatement(customerName, currentSales, currentCreditSales, currentReturns) {
+    if (!customerName) {
+      return initialStatement;
+    }
+
+    const normalizeDate = (value) => value || '9999-12-31';
+    const entries = [
+      ...currentSales.items
+        .filter((item) => item.customerName === customerName)
+        .map((item) => ({
+          id: `sale-${item.id}`,
+          date: item.saleDate,
+          reportDate: item.saleDate ? new Intl.DateTimeFormat('en-GB').format(new Date(item.saleDate)) : '',
+          sequence: item.id,
+          description: `مبيعات نقدية - ${item.productName}`,
+          reference: item.id,
+          transactionType: 'فاتورة المبيعات',
+          deliveryAddress: '',
+          quantity: 1,
+          price: item.amount,
+          total: item.amount,
+          netTotal: item.amount,
+          discount: 0,
+          adjustment: 0,
+          debit: item.amount,
+          credit: 0,
+          status: item.status,
+          statusLabel: item.status,
+          notes: item.notes ?? ''
+        })),
+      ...currentCreditSales.items
+        .filter((item) => item.customerName === customerName)
+        .flatMap((item) => {
+          const rows = [
+            {
+              id: `credit-invoice-${item.id}`,
+              date: item.dueDate,
+              reportDate: item.dueDate ? new Intl.DateTimeFormat('en-GB').format(new Date(item.dueDate)) : '',
+              sequence: item.invoiceNumber || item.id,
+              description: 'فاتورة آجل',
+              reference: item.invoiceNumber || item.id,
+              transactionType: 'فاتورة الآجل',
+              deliveryAddress: '',
+              quantity: 1,
+              price: item.amount,
+              total: item.amount,
+              netTotal: item.amount,
+              discount: 0,
+              adjustment: 0,
+              debit: item.amount,
+              credit: 0,
+              status: item.status,
+              statusLabel: item.status,
+              notes: item.notes ?? ''
+            }
+          ];
+
+          if (item.paidAmount > 0) {
+            rows.push({
+              id: `credit-payment-${item.id}`,
+              date: item.dueDate,
+              reportDate: item.dueDate ? new Intl.DateTimeFormat('en-GB').format(new Date(item.dueDate)) : '',
+              sequence: item.invoiceNumber || item.id,
+              description: 'سداد من العميل',
+              reference: item.invoiceNumber || item.id,
+              transactionType: 'Consolidation',
+              deliveryAddress: '',
+              quantity: '',
+              price: 0,
+              total: item.paidAmount,
+              netTotal: item.paidAmount,
+              discount: 0,
+              adjustment: 0,
+              debit: 0,
+              credit: item.paidAmount,
+              status: item.status,
+              statusLabel: item.paidAmount >= item.amount ? 'مسددة' : 'مسدد جزئيا',
+              notes: item.notes ?? ''
+            });
+          }
+
+          return rows;
+        }),
+      ...currentReturns.items
+        .filter((item) => item.customerName === customerName)
+        .map((item) => ({
+          id: `return-${item.id}`,
+          date: item.returnDate,
+          reportDate: item.returnDate ? new Intl.DateTimeFormat('en-GB').format(new Date(item.returnDate)) : '',
+          sequence: item.id,
+          description: 'مرتجع / إشعار دائن',
+          reference: item.originalInvoiceNumber || item.id,
+          transactionType: 'إشعار دائن',
+          deliveryAddress: '',
+          quantity: '',
+          price: 0,
+          total: item.amount,
+          netTotal: item.amount,
+          discount: 0,
+          adjustment: 0,
+          debit: 0,
+          credit: item.amount,
+          status: item.status,
+          statusLabel: item.status,
+          notes: item.reason || item.notes || ''
+        }))
+    ]
+      .sort((left, right) => normalizeDate(left.date).localeCompare(normalizeDate(right.date)));
+
+    let runningBalance = 0;
+    const withBalance = entries.map((entry) => {
+      runningBalance += entry.debit - entry.credit;
+      return {
+        ...entry,
+        balance: runningBalance
+      };
+    });
+
+    const totalDebit = withBalance.reduce((sum, item) => sum + item.debit, 0);
+    const totalCredit = withBalance.reduce((sum, item) => sum + item.credit, 0);
+
+    return {
+      customerName,
+      summary: [
+        {
+          id: 'statement-debit',
+          label: 'إجمالي المدين',
+          value: totalDebit,
+          type: 'currency',
+          helper: 'إجمالي المبيعات والفواتير',
+          tone: 'warning'
+        },
+        {
+          id: 'statement-credit',
+          label: 'إجمالي الدائن',
+          value: totalCredit,
+          type: 'currency',
+          helper: 'سداد ومرتجعات',
+          tone: 'calm'
+        },
+        {
+          id: 'statement-balance',
+          label: 'الرصيد الحالي',
+          value: runningBalance,
+          type: 'currency',
+          helper: runningBalance > 0 ? 'على العميل' : runningBalance < 0 ? 'له رصيد دائن' : 'الرصيد متزن',
+          tone: runningBalance > 0 ? 'alert' : 'accent'
+        }
+      ],
+      entries: withBalance
+    };
+  }
+
+  const customerOptions = Array.from(
+    new Set([
+      ...sales.items.map((item) => item.customerName),
+      ...creditSales.items.map((item) => item.customerName),
+      ...returns.items.map((item) => item.customerName)
+    ].filter(Boolean))
+  ).sort((left, right) => left.localeCompare(right, 'ar'));
+
+  function handleStatementCustomerChange(event) {
+    const customerName = event.target.value;
+    setStatement(buildCustomerStatement(customerName, sales, creditSales, returns));
+  }
+
+  function handleStatementPrint() {
+    window.print();
+  }
+
+  useEffect(() => {
+    if (!statement.customerName) {
+      return;
+    }
+
+    setStatement(buildCustomerStatement(statement.customerName, sales, creditSales, returns));
+  }, [sales, creditSales, returns]);
 
   // ── Sales ──────────────────────────────────────────────
   function handleSalesInputChange(event) {
@@ -1677,6 +2002,15 @@ export default function App() {
             onEdit={startCustodyEdit}
             onDelete={requestCustodyDelete}
             onManageTransactions={openCustodyTransactions}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'statement' ? (
+          <StatementView
+            statement={statement}
+            customers={customerOptions}
+            onCustomerChange={handleStatementCustomerChange}
+            onPrint={handleStatementPrint}
           />
         ) : null}
       </main>
