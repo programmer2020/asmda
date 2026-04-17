@@ -418,6 +418,10 @@ async function fetchJson(url, options = {}) {
   return response.json();
 }
 
+function safeFetch(url, fallback) {
+  return fetchJson(url).catch(() => fallback);
+}
+
 function Modal({ isOpen, onClose, title, children }) {
   if (!isOpen) return null;
   return (
@@ -1643,26 +1647,27 @@ export default function App() {
   }, []);
 
   async function loadWorkspace() {
+    const emptyList = { overview: [], items: [] };
     const [dashboardData, salesData, creditData, returnsData, priceListData, custodiesData, checksData,
       fpData, rmData, rssData, fmcData, rmpData, mmpData, mscData, payData, cpaData, fsData
     ] = await Promise.all([
-      fetchJson(buildUrl('/dashboard')),
-      fetchJson(buildUrl('/sales')),
-      fetchJson(buildUrl('/credit-sales')),
-      fetchJson(buildUrl('/returns')),
-      fetchJson(buildUrl('/price-list')),
-      fetchJson(buildUrl('/custodies')),
-      fetchJson(buildUrl('/checks')),
-      fetchJson(buildUrl('/final-product-store')),
-      fetchJson(buildUrl('/raw-materials-store')),
-      fetchJson(buildUrl('/rep-sub-stores')),
-      fetchJson(buildUrl('/financial-manager-custody')),
-      fetchJson(buildUrl('/raw-materials-purchases')),
-      fetchJson(buildUrl('/machine-maintenance-purchases')),
-      fetchJson(buildUrl('/misc-purchases')),
-      fetchJson(buildUrl('/payroll-advances')),
-      fetchJson(buildUrl('/customer-payment-alerts')),
-      fetchJson(buildUrl('/free-samples'))
+      safeFetch(buildUrl('/dashboard'), initialDashboard),
+      safeFetch(buildUrl('/sales'), initialSales),
+      safeFetch(buildUrl('/credit-sales'), initialCreditSales),
+      safeFetch(buildUrl('/returns'), initialReturns),
+      safeFetch(buildUrl('/price-list'), initialPriceList),
+      safeFetch(buildUrl('/custodies'), initialCustodies),
+      safeFetch(buildUrl('/checks'), initialChecks),
+      safeFetch(buildUrl('/final-product-store'), emptyList),
+      safeFetch(buildUrl('/raw-materials-store'), emptyList),
+      safeFetch(buildUrl('/rep-sub-stores'), emptyList),
+      safeFetch(buildUrl('/financial-manager-custody'), emptyList),
+      safeFetch(buildUrl('/raw-materials-purchases'), emptyList),
+      safeFetch(buildUrl('/machine-maintenance-purchases'), emptyList),
+      safeFetch(buildUrl('/misc-purchases'), emptyList),
+      safeFetch(buildUrl('/payroll-advances'), emptyList),
+      safeFetch(buildUrl('/customer-payment-alerts'), emptyList),
+      safeFetch(buildUrl('/free-samples'), emptyList)
     ]);
 
     setDashboard(dashboardData);
