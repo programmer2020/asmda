@@ -724,6 +724,10 @@ app.put('/api/free-samples/:id', async (req, res) => {
 });
 app.delete('/api/free-samples/:id', async (req, res) => { try { const d = await deleteFreeSampleRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
 
-app.listen(port, () => {
-  console.log(`ERB backend is running on http://localhost:${port}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`ERB backend is running on http://localhost:${port}`);
+  });
+}
+
+export default app;
