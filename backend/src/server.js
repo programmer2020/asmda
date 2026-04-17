@@ -30,7 +30,43 @@ import {
   getChecksData,
   createCheckRecord,
   updateCheckRecord,
-  deleteCheckRecord
+  deleteCheckRecord,
+  getFinalProductStoreData,
+  createFinalProductRecord,
+  updateFinalProductRecord,
+  deleteFinalProductRecord,
+  getRawMaterialsStoreData,
+  createRawMaterialRecord,
+  updateRawMaterialRecord,
+  deleteRawMaterialRecord,
+  getRepSubStoresData,
+  createRepSubStoreRecord,
+  updateRepSubStoreRecord,
+  deleteRepSubStoreRecord,
+  getFinancialManagerCustodyData,
+  createFinManagerCustodyRecord,
+  updateFinManagerCustodyRecord,
+  deleteFinManagerCustodyRecord,
+  getRawMaterialsPurchasesData,
+  createRawPurchaseRecord,
+  updateRawPurchaseRecord,
+  deleteRawPurchaseRecord,
+  getMachineMaintenancePurchasesData,
+  createMachinePurchaseRecord,
+  updateMachinePurchaseRecord,
+  deleteMachinePurchaseRecord,
+  getMiscPurchasesData,
+  createMiscPurchaseRecord,
+  updateMiscPurchaseRecord,
+  deleteMiscPurchaseRecord,
+  getPayrollAdvancesData,
+  createPayrollAdvanceRecord,
+  updatePayrollAdvanceRecord,
+  deletePayrollAdvanceRecord,
+  getCustomerPaymentAlertsData,
+  createPaymentAlertRecord,
+  updatePaymentAlertRecord,
+  deletePaymentAlertRecord
 } from './data/erbStore.js';
 import { getDatabaseStatus, safeQuery } from './db.js';
 import { createSwaggerSpec } from './swagger.js';
@@ -555,6 +591,120 @@ app.delete('/api/checks/:id', async (request, response) => {
     response.status(500).json({ message: err.message });
   }
 });
+
+// ── Final Product Store ──────────────────────────────────────────────────────
+app.get('/api/final-product-store', async (_req, res) => { try { res.json(await getFinalProductStoreData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/final-product-store', async (req, res) => {
+  if (!req.body.productName) { res.status(400).json({ message: 'يرجى إدخال اسم المنتج.' }); return; }
+  try { res.status(201).json(await createFinalProductRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/final-product-store/:id', async (req, res) => {
+  if (!req.body.productName) { res.status(400).json({ message: 'يرجى إدخال اسم المنتج.' }); return; }
+  try { const u = await updateFinalProductRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/final-product-store/:id', async (req, res) => { try { const d = await deleteFinalProductRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Raw Materials & Packaging Store ──────────────────────────────────────────
+app.get('/api/raw-materials-store', async (_req, res) => { try { res.json(await getRawMaterialsStoreData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/raw-materials-store', async (req, res) => {
+  if (!req.body.materialName) { res.status(400).json({ message: 'يرجى إدخال اسم الخامة.' }); return; }
+  try { res.status(201).json(await createRawMaterialRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/raw-materials-store/:id', async (req, res) => {
+  if (!req.body.materialName) { res.status(400).json({ message: 'يرجى إدخال اسم الخامة.' }); return; }
+  try { const u = await updateRawMaterialRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/raw-materials-store/:id', async (req, res) => { try { const d = await deleteRawMaterialRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Rep Sub-Stores ───────────────────────────────────────────────────────────
+app.get('/api/rep-sub-stores', async (_req, res) => { try { res.json(await getRepSubStoresData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/rep-sub-stores', async (req, res) => {
+  if (!req.body.repName || !req.body.productName) { res.status(400).json({ message: 'يرجى إدخال اسم المندوب واسم المنتج.' }); return; }
+  try { res.status(201).json(await createRepSubStoreRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/rep-sub-stores/:id', async (req, res) => {
+  if (!req.body.repName || !req.body.productName) { res.status(400).json({ message: 'يرجى إدخال اسم المندوب واسم المنتج.' }); return; }
+  try { const u = await updateRepSubStoreRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/rep-sub-stores/:id', async (req, res) => { try { const d = await deleteRepSubStoreRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Financial Manager Custody ────────────────────────────────────────────────
+app.get('/api/financial-manager-custody', async (_req, res) => { try { res.json(await getFinancialManagerCustodyData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/financial-manager-custody', async (req, res) => {
+  if (!req.body.employeeName) { res.status(400).json({ message: 'يرجى إدخال اسم الموظف.' }); return; }
+  if (Number(req.body.amount) <= 0) { res.status(400).json({ message: 'قيمة العهدة يجب أن تكون أكبر من صفر.' }); return; }
+  try { res.status(201).json(await createFinManagerCustodyRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/financial-manager-custody/:id', async (req, res) => {
+  if (!req.body.employeeName) { res.status(400).json({ message: 'يرجى إدخال اسم الموظف.' }); return; }
+  try { const u = await updateFinManagerCustodyRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/financial-manager-custody/:id', async (req, res) => { try { const d = await deleteFinManagerCustodyRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Raw Materials Purchases ──────────────────────────────────────────────────
+app.get('/api/raw-materials-purchases', async (_req, res) => { try { res.json(await getRawMaterialsPurchasesData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/raw-materials-purchases', async (req, res) => {
+  if (!req.body.supplierName || !req.body.materialName) { res.status(400).json({ message: 'يرجى إدخال اسم المورد واسم الخامة.' }); return; }
+  if (Number(req.body.quantity) <= 0 || Number(req.body.unitPrice) <= 0) { res.status(400).json({ message: 'الكمية وسعر الوحدة يجب أن يكونا أكبر من صفر.' }); return; }
+  try { res.status(201).json(await createRawPurchaseRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/raw-materials-purchases/:id', async (req, res) => {
+  if (!req.body.supplierName || !req.body.materialName) { res.status(400).json({ message: 'يرجى إدخال اسم المورد واسم الخامة.' }); return; }
+  try { const u = await updateRawPurchaseRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/raw-materials-purchases/:id', async (req, res) => { try { const d = await deleteRawPurchaseRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Machine Maintenance Purchases ────────────────────────────────────────────
+app.get('/api/machine-maintenance-purchases', async (_req, res) => { try { res.json(await getMachineMaintenancePurchasesData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/machine-maintenance-purchases', async (req, res) => {
+  if (!req.body.supplierName || !req.body.description) { res.status(400).json({ message: 'يرجى إدخال اسم المورد ووصف العملية.' }); return; }
+  if (Number(req.body.amount) <= 0) { res.status(400).json({ message: 'القيمة يجب أن تكون أكبر من صفر.' }); return; }
+  try { res.status(201).json(await createMachinePurchaseRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/machine-maintenance-purchases/:id', async (req, res) => {
+  if (!req.body.supplierName || !req.body.description) { res.status(400).json({ message: 'يرجى إدخال اسم المورد ووصف العملية.' }); return; }
+  try { const u = await updateMachinePurchaseRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/machine-maintenance-purchases/:id', async (req, res) => { try { const d = await deleteMachinePurchaseRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Misc Purchases ───────────────────────────────────────────────────────────
+app.get('/api/misc-purchases', async (_req, res) => { try { res.json(await getMiscPurchasesData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/misc-purchases', async (req, res) => {
+  if (!req.body.description) { res.status(400).json({ message: 'يرجى إدخال وصف المصروف.' }); return; }
+  if (Number(req.body.amount) <= 0) { res.status(400).json({ message: 'القيمة يجب أن تكون أكبر من صفر.' }); return; }
+  try { res.status(201).json(await createMiscPurchaseRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/misc-purchases/:id', async (req, res) => {
+  if (!req.body.description) { res.status(400).json({ message: 'يرجى إدخال وصف المصروف.' }); return; }
+  try { const u = await updateMiscPurchaseRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/misc-purchases/:id', async (req, res) => { try { const d = await deleteMiscPurchaseRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Payroll & Advances ───────────────────────────────────────────────────────
+app.get('/api/payroll-advances', async (_req, res) => { try { res.json(await getPayrollAdvancesData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/payroll-advances', async (req, res) => {
+  if (!req.body.employeeName) { res.status(400).json({ message: 'يرجى إدخال اسم الموظف.' }); return; }
+  if (Number(req.body.amount) <= 0) { res.status(400).json({ message: 'القيمة يجب أن تكون أكبر من صفر.' }); return; }
+  try { res.status(201).json(await createPayrollAdvanceRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/payroll-advances/:id', async (req, res) => {
+  if (!req.body.employeeName) { res.status(400).json({ message: 'يرجى إدخال اسم الموظف.' }); return; }
+  try { const u = await updatePayrollAdvanceRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/payroll-advances/:id', async (req, res) => { try { const d = await deletePayrollAdvanceRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Customer Payment Alerts ──────────────────────────────────────────────────
+app.get('/api/customer-payment-alerts', async (_req, res) => { try { res.json(await getCustomerPaymentAlertsData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/customer-payment-alerts', async (req, res) => {
+  if (!req.body.customerName) { res.status(400).json({ message: 'يرجى إدخال اسم العميل.' }); return; }
+  if (Number(req.body.amount) <= 0) { res.status(400).json({ message: 'القيمة يجب أن تكون أكبر من صفر.' }); return; }
+  try { res.status(201).json(await createPaymentAlertRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/customer-payment-alerts/:id', async (req, res) => {
+  if (!req.body.customerName) { res.status(400).json({ message: 'يرجى إدخال اسم العميل.' }); return; }
+  try { const u = await updatePaymentAlertRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/customer-payment-alerts/:id', async (req, res) => { try { const d = await deletePaymentAlertRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
 
 app.listen(port, () => {
   console.log(`ERB backend is running on http://localhost:${port}`);

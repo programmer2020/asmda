@@ -109,44 +109,7 @@ const navigation = [
   }
 ];
 
-const placeholderModuleConfig = {
-  'final-product-store': {
-    title: 'مخزن منتج نهائي',
-    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بحركات الإضافة والصرف وجرد المخزون النهائي.'
-  },
-  'raw-materials-packaging-store': {
-    title: 'مخزن خامات وتعبئة وتغليف',
-    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بأذون صرف وإضافة الخامات ومواد التعبئة والتغليف.'
-  },
-  'rep-sub-stores': {
-    title: 'مخازن فرعية للمناديب',
-    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بعهدة كل مندوب وحركة التسليم والاسترداد.'
-  },
-  'financial-manager-custody': {
-    title: 'عهدة المدير المالي',
-    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بسجل عهد الموظفين الصادرة من عهدة المدير المالي.'
-  },
-  'raw-materials-purchases': {
-    title: 'مشتريات خامات',
-    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بأوامر الشراء وفواتير الموردين للخامات.'
-  },
-  'machine-maintenance-purchases': {
-    title: 'مشتريات صيانة مكن',
-    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بمشتريات الصيانة وقطع غيار خطوط الإنتاج.'
-  },
-  'misc-purchases': {
-    title: 'مشتريات نثرية',
-    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بالمصروفات النثرية وسندات الصرف.'
-  },
-  'payroll-advances': {
-    title: 'رواتب وسلف',
-    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بمسير الرواتب وحركة السلف وتسوياتها.'
-  },
-  'customer-payment-alerts': {
-    title: 'تنبيه بمواعيد الدفع الخاصة بالعملاء',
-    description: 'هذه صفحة مبدئية، ويمكن ربطها لاحقا بتنبيهات الاستحقاق والتنبيهات الآلية للعملاء.'
-  }
-};
+const placeholderModuleConfig = {};
 
 const salesStatuses = ['جديدة', 'قيد التنفيذ', 'مكتملة'];
 const creditStatuses = ['مستحقة', 'مسدد جزئيا', 'متأخرة', 'مسددة'];
@@ -155,6 +118,12 @@ const custodyStatuses = ['نشطة', 'مغلقة'];
 const custodyTypes = ['نقدية', 'عينية'];
 const transactionTypes = ['صرف', 'استعاضة', 'تسوية', 'إرجاع عهدة'];
 const checkStatuses = ['معلق', 'محصّل', 'مرتجع'];
+const storeStatuses = ['متوفر', 'منخفض', 'نفد'];
+const repStoreStatuses = ['مسلّم', 'مسترد', 'قيد التسليم'];
+const payrollTypes = ['راتب', 'سلفة'];
+const payrollStatuses = ['معلق', 'مدفوع', 'مسترد جزئياً'];
+const alertTypes = ['فاتورة آجل', 'شيك', 'أخرى'];
+const alertStatuses = ['قادم', 'متأخر', 'تم السداد'];
 
 const initialDashboard = {
   meta: null,
@@ -210,6 +179,26 @@ const initialCheckForm = {
   status: 'معلق',
   notes: ''
 };
+
+const initialFinalProductStore = { overview: [], items: [] };
+const initialRawMaterialsStore = { overview: [], items: [] };
+const initialRepSubStores = { overview: [], items: [] };
+const initialFinManagerCustody = { overview: [], items: [] };
+const initialRawPurchases = { overview: [], items: [] };
+const initialMachinePurchases = { overview: [], items: [] };
+const initialMiscPurchases = { overview: [], items: [] };
+const initialPayrollAdvances = { overview: [], items: [] };
+const initialPaymentAlerts = { overview: [], items: [] };
+
+const initialFinalProductForm = { productName: '', category: '', quantity: '', unit: 'قطعة', minStock: '', status: 'متوفر', notes: '' };
+const initialRawMaterialForm = { materialName: '', category: '', quantity: '', unit: 'كجم', minStock: '', status: 'متوفر', notes: '' };
+const initialRepSubStoreForm = { repName: '', productName: '', quantity: '', deliveryDate: '', status: 'مسلّم', notes: '' };
+const initialFinManagerCustodyForm = { employeeName: '', amount: '', purpose: '', custodyDate: '', status: 'نشطة', notes: '' };
+const initialRawPurchaseForm = { supplierName: '', materialName: '', quantity: '', unitPrice: '', purchaseDate: '', invoiceNumber: '', notes: '' };
+const initialMachinePurchaseForm = { supplierName: '', description: '', amount: '', purchaseDate: '', machineName: '', invoiceNumber: '', notes: '' };
+const initialMiscPurchaseForm = { description: '', amount: '', category: '', purchaseDate: '', receiptNumber: '', notes: '' };
+const initialPayrollAdvanceForm = { employeeName: '', type: 'راتب', amount: '', month: '', status: 'معلق', notes: '' };
+const initialPaymentAlertForm = { customerName: '', amount: '', dueDate: '', alertType: 'فاتورة آجل', status: 'قادم', notes: '' };
 
 const initialSalesForm = {
   customerName: '',
@@ -494,6 +483,40 @@ function PlaceholderModuleView({ title, description }) {
         <p style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.8 }}>{description}</p>
       </article>
     </section>
+  );
+}
+
+function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, renderRow, form, editingId, saving, isFormOpen, onOpenForm, onCloseForm, onSubmit, formTitle, formFields }) {
+  return (
+    <>
+      <SummaryCards items={data.overview} />
+      <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
+        <article className="card table-card">
+          <div className="table-actions-header">
+            <div>
+              <p className="eyebrow">{eyebrow}</p>
+              <h3>{headline}</h3>
+            </div>
+            <button type="button" className="primary-button" onClick={onOpenForm}>{addLabel}</button>
+          </div>
+          <div className="table-list">
+            {data.items.map(renderRow)}
+            {data.items.length === 0 && <p className="empty-notice">{emptyLabel}</p>}
+          </div>
+        </article>
+      </section>
+      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? `تعديل ${formTitle}` : `إضافة ${formTitle}`}>
+        <form className="form-grid" onSubmit={onSubmit}>
+          {formFields}
+          <div className="form-actions full-width" style={{ marginTop: '16px' }}>
+            <button type="submit" className="primary-button" disabled={saving}>
+              {saving ? 'جارٍ الحفظ...' : editingId ? 'حفظ التعديل' : `إضافة ${formTitle}`}
+            </button>
+            <button type="button" className="ghost-button" onClick={onCloseForm}>إلغاء</button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }
 
@@ -1528,6 +1551,57 @@ export default function App() {
   const [checkSaving, setCheckSaving] = useState(false);
   const [checkEditingId, setCheckEditingId] = useState('');
 
+  // ── New module states ──
+  const [finalProductStore, setFinalProductStore] = useState(initialFinalProductStore);
+  const [rawMaterialsStore, setRawMaterialsStore] = useState(initialRawMaterialsStore);
+  const [repSubStores, setRepSubStores] = useState(initialRepSubStores);
+  const [finManagerCustody, setFinManagerCustody] = useState(initialFinManagerCustody);
+  const [rawPurchases, setRawPurchases] = useState(initialRawPurchases);
+  const [machinePurchases, setMachinePurchases] = useState(initialMachinePurchases);
+  const [miscPurchases, setMiscPurchases] = useState(initialMiscPurchases);
+  const [payrollAdvances, setPayrollAdvances] = useState(initialPayrollAdvances);
+  const [paymentAlerts, setPaymentAlerts] = useState(initialPaymentAlerts);
+
+  const [fpForm, setFpForm] = useState(initialFinalProductForm);
+  const [rmForm, setRmForm] = useState(initialRawMaterialForm);
+  const [rssForm, setRssForm] = useState(initialRepSubStoreForm);
+  const [fmcForm, setFmcForm] = useState(initialFinManagerCustodyForm);
+  const [rmpForm, setRmpForm] = useState(initialRawPurchaseForm);
+  const [mmpForm, setMmpForm] = useState(initialMachinePurchaseForm);
+  const [mscForm, setMscForm] = useState(initialMiscPurchaseForm);
+  const [payForm, setPayForm] = useState(initialPayrollAdvanceForm);
+  const [cpaForm, setCpaForm] = useState(initialPaymentAlertForm);
+
+  const [fpEditingId, setFpEditingId] = useState('');
+  const [rmEditingId, setRmEditingId] = useState('');
+  const [rssEditingId, setRssEditingId] = useState('');
+  const [fmcEditingId, setFmcEditingId] = useState('');
+  const [rmpEditingId, setRmpEditingId] = useState('');
+  const [mmpEditingId, setMmpEditingId] = useState('');
+  const [mscEditingId, setMscEditingId] = useState('');
+  const [payEditingId, setPayEditingId] = useState('');
+  const [cpaEditingId, setCpaEditingId] = useState('');
+
+  const [fpSaving, setFpSaving] = useState(false);
+  const [rmSaving, setRmSaving] = useState(false);
+  const [rssSaving, setRssSaving] = useState(false);
+  const [fmcSaving, setFmcSaving] = useState(false);
+  const [rmpSaving, setRmpSaving] = useState(false);
+  const [mmpSaving, setMmpSaving] = useState(false);
+  const [mscSaving, setMscSaving] = useState(false);
+  const [paySaving, setPaySaving] = useState(false);
+  const [cpaSaving, setCpaSaving] = useState(false);
+
+  const [fpFormOpen, setFpFormOpen] = useState(false);
+  const [rmFormOpen, setRmFormOpen] = useState(false);
+  const [rssFormOpen, setRssFormOpen] = useState(false);
+  const [fmcFormOpen, setFmcFormOpen] = useState(false);
+  const [rmpFormOpen, setRmpFormOpen] = useState(false);
+  const [mmpFormOpen, setMmpFormOpen] = useState(false);
+  const [mscFormOpen, setMscFormOpen] = useState(false);
+  const [payFormOpen, setPayFormOpen] = useState(false);
+  const [cpaFormOpen, setCpaFormOpen] = useState(false);
+
   // Modal visibility state
   const [salesFormOpen, setSalesFormOpen] = useState(false);
   const [creditFormOpen, setCreditFormOpen] = useState(false);
@@ -1556,14 +1630,25 @@ export default function App() {
   }, []);
 
   async function loadWorkspace() {
-    const [dashboardData, salesData, creditData, returnsData, priceListData, custodiesData, checksData] = await Promise.all([
+    const [dashboardData, salesData, creditData, returnsData, priceListData, custodiesData, checksData,
+      fpData, rmData, rssData, fmcData, rmpData, mmpData, mscData, payData, cpaData
+    ] = await Promise.all([
       fetchJson(buildUrl('/dashboard')),
       fetchJson(buildUrl('/sales')),
       fetchJson(buildUrl('/credit-sales')),
       fetchJson(buildUrl('/returns')),
       fetchJson(buildUrl('/price-list')),
       fetchJson(buildUrl('/custodies')),
-      fetchJson(buildUrl('/checks'))
+      fetchJson(buildUrl('/checks')),
+      fetchJson(buildUrl('/final-product-store')),
+      fetchJson(buildUrl('/raw-materials-store')),
+      fetchJson(buildUrl('/rep-sub-stores')),
+      fetchJson(buildUrl('/financial-manager-custody')),
+      fetchJson(buildUrl('/raw-materials-purchases')),
+      fetchJson(buildUrl('/machine-maintenance-purchases')),
+      fetchJson(buildUrl('/misc-purchases')),
+      fetchJson(buildUrl('/payroll-advances')),
+      fetchJson(buildUrl('/customer-payment-alerts'))
     ]);
 
     setDashboard(dashboardData);
@@ -1573,6 +1658,15 @@ export default function App() {
     setPriceList(priceListData);
     setCustodies(custodiesData);
     setChecks(checksData);
+    setFinalProductStore(fpData);
+    setRawMaterialsStore(rmData);
+    setRepSubStores(rssData);
+    setFinManagerCustody(fmcData);
+    setRawPurchases(rmpData);
+    setMachinePurchases(mmpData);
+    setMiscPurchases(mscData);
+    setPayrollAdvances(payData);
+    setPaymentAlerts(cpaData);
 
     // Update notification for today's pending checks
     const today = getTodayLocalDateKey();
@@ -2320,6 +2414,76 @@ export default function App() {
     setDeleteTarget({ type: 'transaction', id });
   }
 
+  // ── Generic CRUD helper ────────────────────────────────
+  function makeModuleCrud(apiPath, setData, form, setForm, initialForm, editingId, setEditingId, saving, setSaving, formOpen, setFormOpen, mapToPayload, mapToForm, deleteType, entityLabel) {
+    function handleInput(e) { const { name, value } = e.target; setForm(c => ({ ...c, [name]: value })); }
+    function openForm() { setEditingId(''); setForm(initialForm); setFormOpen(true); }
+    function startEdit(item) { setEditingId(item.id); setForm(mapToForm(item)); setFormOpen(true); }
+    function closeForm() { setFormOpen(false); setEditingId(''); setForm(initialForm); }
+    async function handleSubmit(e) {
+      e.preventDefault();
+      try {
+        setSaving(true); setError(''); setNotice('');
+        const payload = mapToPayload(form);
+        await fetchJson(editingId ? buildUrl(`${apiPath}/${editingId}`) : buildUrl(apiPath), { method: editingId ? 'PUT' : 'POST', body: JSON.stringify(payload) });
+        await loadWorkspace();
+        closeForm();
+        setNotice(editingId ? `تم تعديل ${entityLabel} بنجاح.` : `تمت إضافة ${entityLabel} بنجاح.`);
+      } catch (err) { setError(err.message); } finally { setSaving(false); }
+    }
+    function requestDelete(id) { setDeleteTarget({ type: deleteType, id }); }
+    async function confirmDelete() {
+      const id = deleteTarget.id; setDeleteTarget(null);
+      try { setError(''); setNotice(''); await fetchJson(buildUrl(`${apiPath}/${id}`), { method: 'DELETE' }); await loadWorkspace(); setNotice(`تم حذف ${entityLabel} بنجاح.`); } catch (err) { setError(err.message); }
+    }
+    return { handleInput, openForm, startEdit, closeForm, handleSubmit, requestDelete, confirmDelete };
+  }
+
+  const fpCrud = makeModuleCrud('/final-product-store', setFinalProductStore, fpForm, setFpForm, initialFinalProductForm, fpEditingId, setFpEditingId, fpSaving, setFpSaving, fpFormOpen, setFpFormOpen,
+    f => ({ ...f, quantity: Number(f.quantity||0), minStock: Number(f.minStock||0) }),
+    i => ({ productName: i.productName, category: i.category, quantity: String(i.quantity), unit: i.unit, minStock: String(i.minStock), status: i.status, notes: i.notes||'' }),
+    'fp', 'المنتج');
+
+  const rmCrud = makeModuleCrud('/raw-materials-store', setRawMaterialsStore, rmForm, setRmForm, initialRawMaterialForm, rmEditingId, setRmEditingId, rmSaving, setRmSaving, rmFormOpen, setRmFormOpen,
+    f => ({ ...f, quantity: Number(f.quantity||0), minStock: Number(f.minStock||0) }),
+    i => ({ materialName: i.materialName, category: i.category, quantity: String(i.quantity), unit: i.unit, minStock: String(i.minStock), status: i.status, notes: i.notes||'' }),
+    'rm', 'الخامة');
+
+  const rssCrud = makeModuleCrud('/rep-sub-stores', setRepSubStores, rssForm, setRssForm, initialRepSubStoreForm, rssEditingId, setRssEditingId, rssSaving, setRssSaving, rssFormOpen, setRssFormOpen,
+    f => ({ ...f, quantity: Number(f.quantity||0) }),
+    i => ({ repName: i.repName, productName: i.productName, quantity: String(i.quantity), deliveryDate: i.deliveryDate||'', status: i.status, notes: i.notes||'' }),
+    'rss', 'السجل');
+
+  const fmcCrud = makeModuleCrud('/financial-manager-custody', setFinManagerCustody, fmcForm, setFmcForm, initialFinManagerCustodyForm, fmcEditingId, setFmcEditingId, fmcSaving, setFmcSaving, fmcFormOpen, setFmcFormOpen,
+    f => ({ ...f, amount: Number(f.amount||0) }),
+    i => ({ employeeName: i.employeeName, amount: String(i.amount), purpose: i.purpose, custodyDate: i.custodyDate||'', status: i.status, notes: i.notes||'' }),
+    'fmc', 'العهدة');
+
+  const rmpCrud = makeModuleCrud('/raw-materials-purchases', setRawPurchases, rmpForm, setRmpForm, initialRawPurchaseForm, rmpEditingId, setRmpEditingId, rmpSaving, setRmpSaving, rmpFormOpen, setRmpFormOpen,
+    f => ({ ...f, quantity: Number(f.quantity||0), unitPrice: Number(f.unitPrice||0) }),
+    i => ({ supplierName: i.supplierName, materialName: i.materialName, quantity: String(i.quantity), unitPrice: String(i.unitPrice), purchaseDate: i.purchaseDate||'', invoiceNumber: i.invoiceNumber, notes: i.notes||'' }),
+    'rmp', 'الفاتورة');
+
+  const mmpCrud = makeModuleCrud('/machine-maintenance-purchases', setMachinePurchases, mmpForm, setMmpForm, initialMachinePurchaseForm, mmpEditingId, setMmpEditingId, mmpSaving, setMmpSaving, mmpFormOpen, setMmpFormOpen,
+    f => ({ ...f, amount: Number(f.amount||0) }),
+    i => ({ supplierName: i.supplierName, description: i.description, amount: String(i.amount), purchaseDate: i.purchaseDate||'', machineName: i.machineName, invoiceNumber: i.invoiceNumber, notes: i.notes||'' }),
+    'mmp', 'العملية');
+
+  const mscCrud = makeModuleCrud('/misc-purchases', setMiscPurchases, mscForm, setMscForm, initialMiscPurchaseForm, mscEditingId, setMscEditingId, mscSaving, setMscSaving, mscFormOpen, setMscFormOpen,
+    f => ({ ...f, amount: Number(f.amount||0) }),
+    i => ({ description: i.description, amount: String(i.amount), category: i.category, purchaseDate: i.purchaseDate||'', receiptNumber: i.receiptNumber, notes: i.notes||'' }),
+    'msc', 'المصروف');
+
+  const payCrud = makeModuleCrud('/payroll-advances', setPayrollAdvances, payForm, setPayForm, initialPayrollAdvanceForm, payEditingId, setPayEditingId, paySaving, setPaySaving, payFormOpen, setPayFormOpen,
+    f => ({ ...f, amount: Number(f.amount||0) }),
+    i => ({ employeeName: i.employeeName, type: i.type, amount: String(i.amount), month: i.month, status: i.status, notes: i.notes||'' }),
+    'pay', 'السجل');
+
+  const cpaCrud = makeModuleCrud('/customer-payment-alerts', setPaymentAlerts, cpaForm, setCpaForm, initialPaymentAlertForm, cpaEditingId, setCpaEditingId, cpaSaving, setCpaSaving, cpaFormOpen, setCpaFormOpen,
+    f => ({ ...f, amount: Number(f.amount||0) }),
+    i => ({ customerName: i.customerName, amount: String(i.amount), dueDate: i.dueDate||'', alertType: i.alertType, status: i.status, notes: i.notes||'' }),
+    'cpa', 'التنبيه');
+
   async function confirmTransactionDelete() {
     const id = deleteTarget.id;
     setDeleteTarget(null);
@@ -2345,6 +2509,15 @@ export default function App() {
     else if (deleteTarget.type === 'custodies') confirmCustodyDelete();
     else if (deleteTarget.type === 'transaction') confirmTransactionDelete();
     else if (deleteTarget.type === 'check') confirmCheckDelete();
+    else if (deleteTarget.type === 'fp') fpCrud.confirmDelete();
+    else if (deleteTarget.type === 'rm') rmCrud.confirmDelete();
+    else if (deleteTarget.type === 'rss') rssCrud.confirmDelete();
+    else if (deleteTarget.type === 'fmc') fmcCrud.confirmDelete();
+    else if (deleteTarget.type === 'rmp') rmpCrud.confirmDelete();
+    else if (deleteTarget.type === 'mmp') mmpCrud.confirmDelete();
+    else if (deleteTarget.type === 'msc') mscCrud.confirmDelete();
+    else if (deleteTarget.type === 'pay') payCrud.confirmDelete();
+    else if (deleteTarget.type === 'cpa') cpaCrud.confirmDelete();
   }
 
   const deleteMessages = {
@@ -2354,7 +2527,16 @@ export default function App() {
     'price-list': 'هل أنت متأكد من حذف هذا المنتج من قائمة الأسعار؟ لا يمكن التراجع عن هذا الإجراء.',
     custodies: 'هل أنت متأكد من حذف العهدة؟ لا يمكن التراجع، سيتم حذف جميع الحركات المتعلقة.',
     transaction: 'هل أنت متأكد من حذف هذه الحركة؟ سيتم استرجاع رصيد العهدة كالمعاملة العكسية.',
-    check: 'هل أنت متأكد من حذف هذا الشيك؟ لا يمكن التراجع عن هذا الإجراء.'
+    check: 'هل أنت متأكد من حذف هذا الشيك؟ لا يمكن التراجع عن هذا الإجراء.',
+    fp: 'هل أنت متأكد من حذف هذا المنتج من المخزن؟ لا يمكن التراجع عن هذا الإجراء.',
+    rm: 'هل أنت متأكد من حذف هذه الخامة؟ لا يمكن التراجع عن هذا الإجراء.',
+    rss: 'هل أنت متأكد من حذف هذا السجل؟ لا يمكن التراجع عن هذا الإجراء.',
+    fmc: 'هل أنت متأكد من حذف هذه العهدة؟ لا يمكن التراجع عن هذا الإجراء.',
+    rmp: 'هل أنت متأكد من حذف فاتورة المشتريات؟ لا يمكن التراجع عن هذا الإجراء.',
+    mmp: 'هل أنت متأكد من حذف عملية الصيانة؟ لا يمكن التراجع عن هذا الإجراء.',
+    msc: 'هل أنت متأكد من حذف هذا المصروف؟ لا يمكن التراجع عن هذا الإجراء.',
+    pay: 'هل أنت متأكد من حذف هذا السجل؟ لا يمكن التراجع عن هذا الإجراء.',
+    cpa: 'هل أنت متأكد من حذف هذا التنبيه؟ لا يمكن التراجع عن هذا الإجراء.'
   };
 
   const title = navigation.find((item) => item.id === activeView)?.label ?? 'لوحة التحكم';
@@ -2542,8 +2724,409 @@ export default function App() {
           />
         ) : null}
 
-        {!loading && !error && placeholderModule ? (
-          <PlaceholderModuleView title={placeholderModule.title} description={placeholderModule.description} />
+        {!loading && !error && activeView === 'final-product-store' ? (
+          <GenericCrudView
+            data={finalProductStore}
+            eyebrow="مخزن المنتج النهائي"
+            headline="متابعة أرصدة المنتج النهائي"
+            addLabel="إضافة منتج"
+            emptyLabel="لا توجد منتجات مسجلة بعد."
+            formTitle="منتج"
+            editingId={fpEditingId}
+            saving={fpSaving}
+            isFormOpen={fpFormOpen}
+            onOpenForm={fpCrud.openForm}
+            onCloseForm={fpCrud.closeForm}
+            onSubmit={fpCrud.handleSubmit}
+            form={fpForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.productName}</strong>
+                    <span className={`status-chip ${item.status === 'متوفر' ? 'success' : item.status === 'منخفض' ? 'warning' : 'danger'}`}>{item.status}</span>
+                    {item.category && <span className="status-chip neutral">{item.category}</span>}
+                  </div>
+                  <p>الكمية: {item.quantity} {item.unit} · الحد الأدنى: {item.minStock}</p>
+                </div>
+                <div className="table-side">
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => fpCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => fpCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم المنتج</span><input name="productName" value={fpForm.productName} onChange={fpCrud.handleInput} required /></label>
+              <label><span>التصنيف</span><input name="category" value={fpForm.category} onChange={fpCrud.handleInput} /></label>
+              <label><span>الكمية</span><input name="quantity" type="number" min="0" value={fpForm.quantity} onChange={fpCrud.handleInput} /></label>
+              <label><span>الوحدة</span><input name="unit" value={fpForm.unit} onChange={fpCrud.handleInput} /></label>
+              <label><span>الحد الأدنى</span><input name="minStock" type="number" min="0" value={fpForm.minStock} onChange={fpCrud.handleInput} /></label>
+              <label><span>الحالة</span><select name="status" value={fpForm.status} onChange={fpCrud.handleInput}>{storeStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={fpForm.notes} onChange={fpCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'raw-materials-packaging-store' ? (
+          <GenericCrudView
+            data={rawMaterialsStore}
+            eyebrow="مخزن الخامات والتعبئة"
+            headline="إدارة خامات التشغيل والتغليف"
+            addLabel="إضافة خامة"
+            emptyLabel="لا توجد خامات مسجلة بعد."
+            formTitle="خامة"
+            editingId={rmEditingId}
+            saving={rmSaving}
+            isFormOpen={rmFormOpen}
+            onOpenForm={rmCrud.openForm}
+            onCloseForm={rmCrud.closeForm}
+            onSubmit={rmCrud.handleSubmit}
+            form={rmForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.materialName}</strong>
+                    <span className={`status-chip ${item.status === 'متوفر' ? 'success' : item.status === 'منخفض' ? 'warning' : 'danger'}`}>{item.status}</span>
+                    {item.category && <span className="status-chip neutral">{item.category}</span>}
+                  </div>
+                  <p>الكمية: {item.quantity} {item.unit} · الحد الأدنى: {item.minStock}</p>
+                </div>
+                <div className="table-side">
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => rmCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => rmCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم الخامة</span><input name="materialName" value={rmForm.materialName} onChange={rmCrud.handleInput} required /></label>
+              <label><span>التصنيف</span><input name="category" value={rmForm.category} onChange={rmCrud.handleInput} /></label>
+              <label><span>الكمية</span><input name="quantity" type="number" min="0" value={rmForm.quantity} onChange={rmCrud.handleInput} /></label>
+              <label><span>الوحدة</span><input name="unit" value={rmForm.unit} onChange={rmCrud.handleInput} /></label>
+              <label><span>الحد الأدنى</span><input name="minStock" type="number" min="0" value={rmForm.minStock} onChange={rmCrud.handleInput} /></label>
+              <label><span>الحالة</span><select name="status" value={rmForm.status} onChange={rmCrud.handleInput}>{storeStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={rmForm.notes} onChange={rmCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'rep-sub-stores' ? (
+          <GenericCrudView
+            data={repSubStores}
+            eyebrow="مخازن المناديب"
+            headline="متابعة العهد والمخزون لدى المناديب"
+            addLabel="إضافة سجل"
+            emptyLabel="لا توجد سجلات بعد."
+            formTitle="سجل مندوب"
+            editingId={rssEditingId}
+            saving={rssSaving}
+            isFormOpen={rssFormOpen}
+            onOpenForm={rssCrud.openForm}
+            onCloseForm={rssCrud.closeForm}
+            onSubmit={rssCrud.handleSubmit}
+            form={rssForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.repName}</strong>
+                    <span className={`status-chip ${item.status === 'مسلّم' ? 'success' : item.status === 'مسترد' ? 'neutral' : 'warning'}`}>{item.status}</span>
+                  </div>
+                  <p>{item.productName} · الكمية: {item.quantity}</p>
+                  <small>{formatDate(item.deliveryDate)}</small>
+                </div>
+                <div className="table-side">
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => rssCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => rssCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم المندوب</span><input name="repName" value={rssForm.repName} onChange={rssCrud.handleInput} required /></label>
+              <label><span>اسم المنتج</span><input name="productName" value={rssForm.productName} onChange={rssCrud.handleInput} required /></label>
+              <label><span>الكمية</span><input name="quantity" type="number" min="0" value={rssForm.quantity} onChange={rssCrud.handleInput} /></label>
+              <label><span>تاريخ التسليم</span><input name="deliveryDate" type="date" value={rssForm.deliveryDate} onChange={rssCrud.handleInput} /></label>
+              <label><span>الحالة</span><select name="status" value={rssForm.status} onChange={rssCrud.handleInput}>{repStoreStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={rssForm.notes} onChange={rssCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'financial-manager-custody' ? (
+          <GenericCrudView
+            data={finManagerCustody}
+            eyebrow="عهدة المدير المالي"
+            headline="توزيع عهد الموظفين من عهدة المدير المالي"
+            addLabel="إضافة عهدة"
+            emptyLabel="لا توجد عهد مسجلة بعد."
+            formTitle="عهدة"
+            editingId={fmcEditingId}
+            saving={fmcSaving}
+            isFormOpen={fmcFormOpen}
+            onOpenForm={fmcCrud.openForm}
+            onCloseForm={fmcCrud.closeForm}
+            onSubmit={fmcCrud.handleSubmit}
+            form={fmcForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.employeeName}</strong>
+                    <span className={`status-chip ${item.status === 'نشطة' ? 'success' : 'neutral'}`}>{item.status}</span>
+                  </div>
+                  <p>{item.purpose}</p>
+                  <small>{formatDate(item.custodyDate)}</small>
+                </div>
+                <div className="table-side">
+                  <strong>{formatMoney(item.amount)}</strong>
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => fmcCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => fmcCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم الموظف</span><input name="employeeName" value={fmcForm.employeeName} onChange={fmcCrud.handleInput} required /></label>
+              <label><span>المبلغ</span><input name="amount" type="number" min="0" step="0.01" value={fmcForm.amount} onChange={fmcCrud.handleInput} required /></label>
+              <label><span>الغرض</span><input name="purpose" value={fmcForm.purpose} onChange={fmcCrud.handleInput} /></label>
+              <label><span>التاريخ</span><input name="custodyDate" type="date" value={fmcForm.custodyDate} onChange={fmcCrud.handleInput} /></label>
+              <label><span>الحالة</span><select name="status" value={fmcForm.status} onChange={fmcCrud.handleInput}>{custodyStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={fmcForm.notes} onChange={fmcCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'raw-materials-purchases' ? (
+          <GenericCrudView
+            data={rawPurchases}
+            eyebrow="مشتريات الخامات"
+            headline="تسجيل ومراجعة مشتريات الخامات"
+            addLabel="إضافة فاتورة شراء"
+            emptyLabel="لا توجد فواتير مشتريات بعد."
+            formTitle="فاتورة شراء"
+            editingId={rmpEditingId}
+            saving={rmpSaving}
+            isFormOpen={rmpFormOpen}
+            onOpenForm={rmpCrud.openForm}
+            onCloseForm={rmpCrud.closeForm}
+            onSubmit={rmpCrud.handleSubmit}
+            form={rmpForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.supplierName}</strong>
+                    {item.invoiceNumber && <span className="status-chip neutral">فاتورة {item.invoiceNumber}</span>}
+                  </div>
+                  <p>{item.materialName} · {item.quantity} وحدة × {formatMoney(item.unitPrice)}</p>
+                  <small>{formatDate(item.purchaseDate)}</small>
+                </div>
+                <div className="table-side">
+                  <strong>{formatMoney(item.totalAmount)}</strong>
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => rmpCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => rmpCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم المورد</span><input name="supplierName" value={rmpForm.supplierName} onChange={rmpCrud.handleInput} required /></label>
+              <label><span>اسم الخامة</span><input name="materialName" value={rmpForm.materialName} onChange={rmpCrud.handleInput} required /></label>
+              <label><span>الكمية</span><input name="quantity" type="number" min="0" step="0.01" value={rmpForm.quantity} onChange={rmpCrud.handleInput} required /></label>
+              <label><span>سعر الوحدة</span><input name="unitPrice" type="number" min="0" step="0.01" value={rmpForm.unitPrice} onChange={rmpCrud.handleInput} required /></label>
+              <label><span>تاريخ الشراء</span><input name="purchaseDate" type="date" value={rmpForm.purchaseDate} onChange={rmpCrud.handleInput} /></label>
+              <label><span>رقم الفاتورة</span><input name="invoiceNumber" value={rmpForm.invoiceNumber} onChange={rmpCrud.handleInput} /></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={rmpForm.notes} onChange={rmpCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'machine-maintenance-purchases' ? (
+          <GenericCrudView
+            data={machinePurchases}
+            eyebrow="مشتريات صيانة المكن"
+            headline="متابعة تكاليف الصيانة وقطع الغيار"
+            addLabel="إضافة عملية صيانة"
+            emptyLabel="لا توجد عمليات صيانة مسجلة بعد."
+            formTitle="عملية صيانة"
+            editingId={mmpEditingId}
+            saving={mmpSaving}
+            isFormOpen={mmpFormOpen}
+            onOpenForm={mmpCrud.openForm}
+            onCloseForm={mmpCrud.closeForm}
+            onSubmit={mmpCrud.handleSubmit}
+            form={mmpForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.supplierName}</strong>
+                    {item.machineName && <span className="status-chip neutral">{item.machineName}</span>}
+                  </div>
+                  <p>{item.description}</p>
+                  <small>{formatDate(item.purchaseDate)}{item.invoiceNumber ? ` · فاتورة ${item.invoiceNumber}` : ''}</small>
+                </div>
+                <div className="table-side">
+                  <strong>{formatMoney(item.amount)}</strong>
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => mmpCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => mmpCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم المورد</span><input name="supplierName" value={mmpForm.supplierName} onChange={mmpCrud.handleInput} required /></label>
+              <label><span>وصف العملية</span><input name="description" value={mmpForm.description} onChange={mmpCrud.handleInput} required /></label>
+              <label><span>القيمة</span><input name="amount" type="number" min="0" step="0.01" value={mmpForm.amount} onChange={mmpCrud.handleInput} required /></label>
+              <label><span>اسم الماكينة</span><input name="machineName" value={mmpForm.machineName} onChange={mmpCrud.handleInput} /></label>
+              <label><span>تاريخ الشراء</span><input name="purchaseDate" type="date" value={mmpForm.purchaseDate} onChange={mmpCrud.handleInput} /></label>
+              <label><span>رقم الفاتورة</span><input name="invoiceNumber" value={mmpForm.invoiceNumber} onChange={mmpCrud.handleInput} /></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={mmpForm.notes} onChange={mmpCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'misc-purchases' ? (
+          <GenericCrudView
+            data={miscPurchases}
+            eyebrow="المصروفات النثرية"
+            headline="إدارة المصروفات النثرية اليومية"
+            addLabel="إضافة مصروف"
+            emptyLabel="لا توجد مصروفات مسجلة بعد."
+            formTitle="مصروف"
+            editingId={mscEditingId}
+            saving={mscSaving}
+            isFormOpen={mscFormOpen}
+            onOpenForm={mscCrud.openForm}
+            onCloseForm={mscCrud.closeForm}
+            onSubmit={mscCrud.handleSubmit}
+            form={mscForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.description}</strong>
+                    {item.category && <span className="status-chip neutral">{item.category}</span>}
+                  </div>
+                  <small>{formatDate(item.purchaseDate)}{item.receiptNumber ? ` · إيصال ${item.receiptNumber}` : ''}</small>
+                </div>
+                <div className="table-side">
+                  <strong>{formatMoney(item.amount)}</strong>
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => mscCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => mscCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>وصف المصروف</span><input name="description" value={mscForm.description} onChange={mscCrud.handleInput} required /></label>
+              <label><span>القيمة</span><input name="amount" type="number" min="0" step="0.01" value={mscForm.amount} onChange={mscCrud.handleInput} required /></label>
+              <label><span>التصنيف</span><input name="category" value={mscForm.category} onChange={mscCrud.handleInput} placeholder="مثال: نقل، أدوات مكتبية.." /></label>
+              <label><span>التاريخ</span><input name="purchaseDate" type="date" value={mscForm.purchaseDate} onChange={mscCrud.handleInput} /></label>
+              <label><span>رقم الإيصال</span><input name="receiptNumber" value={mscForm.receiptNumber} onChange={mscCrud.handleInput} /></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={mscForm.notes} onChange={mscCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'payroll-advances' ? (
+          <GenericCrudView
+            data={payrollAdvances}
+            eyebrow="الرواتب والسلف"
+            headline="متابعة الرواتب والسلف الشهرية"
+            addLabel="إضافة سجل"
+            emptyLabel="لا توجد سجلات رواتب أو سلف بعد."
+            formTitle="سجل"
+            editingId={payEditingId}
+            saving={paySaving}
+            isFormOpen={payFormOpen}
+            onOpenForm={payCrud.openForm}
+            onCloseForm={payCrud.closeForm}
+            onSubmit={payCrud.handleSubmit}
+            form={payForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.employeeName}</strong>
+                    <span className={`status-chip ${item.type === 'راتب' ? 'accent' : 'warning'}`}>{item.type}</span>
+                    <span className={`status-chip ${item.status === 'مدفوع' ? 'success' : item.status === 'معلق' ? 'warning' : 'neutral'}`}>{item.status}</span>
+                  </div>
+                  <p>{item.month ? `شهر: ${item.month}` : ''}</p>
+                </div>
+                <div className="table-side">
+                  <strong>{formatMoney(item.amount)}</strong>
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => payCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => payCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم الموظف</span><input name="employeeName" value={payForm.employeeName} onChange={payCrud.handleInput} required /></label>
+              <label><span>النوع</span><select name="type" value={payForm.type} onChange={payCrud.handleInput}>{payrollTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></label>
+              <label><span>المبلغ</span><input name="amount" type="number" min="0" step="0.01" value={payForm.amount} onChange={payCrud.handleInput} required /></label>
+              <label><span>الشهر</span><input name="month" value={payForm.month} onChange={payCrud.handleInput} placeholder="مثال: أبريل 2026" /></label>
+              <label><span>الحالة</span><select name="status" value={payForm.status} onChange={payCrud.handleInput}>{payrollStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={payForm.notes} onChange={payCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'customer-payment-alerts' ? (
+          <GenericCrudView
+            data={paymentAlerts}
+            eyebrow="تنبيهات الدفع"
+            headline="متابعة تنبيهات الاستحقاق والتحصيل"
+            addLabel="إضافة تنبيه"
+            emptyLabel="لا توجد تنبيهات مسجلة بعد."
+            formTitle="تنبيه"
+            editingId={cpaEditingId}
+            saving={cpaSaving}
+            isFormOpen={cpaFormOpen}
+            onOpenForm={cpaCrud.openForm}
+            onCloseForm={cpaCrud.closeForm}
+            onSubmit={cpaCrud.handleSubmit}
+            form={cpaForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.customerName}</strong>
+                    <span className={`status-chip ${item.status === 'تم السداد' ? 'success' : item.status === 'متأخر' ? 'danger' : 'warning'}`}>{item.status}</span>
+                    <span className="status-chip neutral">{item.alertType}</span>
+                  </div>
+                  <small>تاريخ الاستحقاق: {formatDate(item.dueDate)}</small>
+                </div>
+                <div className="table-side">
+                  <strong>{formatMoney(item.amount)}</strong>
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => cpaCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => cpaCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم العميل</span><input name="customerName" value={cpaForm.customerName} onChange={cpaCrud.handleInput} required /></label>
+              <label><span>المبلغ</span><input name="amount" type="number" min="0" step="0.01" value={cpaForm.amount} onChange={cpaCrud.handleInput} required /></label>
+              <label><span>تاريخ الاستحقاق</span><input name="dueDate" type="date" value={cpaForm.dueDate} onChange={cpaCrud.handleInput} /></label>
+              <label><span>نوع التنبيه</span><select name="alertType" value={cpaForm.alertType} onChange={cpaCrud.handleInput}>{alertTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></label>
+              <label><span>الحالة</span><select name="status" value={cpaForm.status} onChange={cpaCrud.handleInput}>{alertStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={cpaForm.notes} onChange={cpaCrud.handleInput} /></label>
+            </>}
+          />
         ) : null}
       </main>
 

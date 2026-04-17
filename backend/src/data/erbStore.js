@@ -861,3 +861,453 @@ export async function deleteCheckRecord(id) {
   return result.rowCount > 0;
 }
 
+// ── Final Product Store ───────────────────────────────────────────────────────
+
+function mapFinalProduct(row) {
+  return {
+    id: row.id,
+    productName: row.product_name,
+    category: row.category || '',
+    quantity: Number(row.quantity),
+    unit: row.unit || 'قطعة',
+    minStock: Number(row.min_stock),
+    status: row.status,
+    notes: row.notes || ''
+  };
+}
+
+export async function getFinalProductStoreData() {
+  const result = await query('SELECT * FROM final_product_store ORDER BY created_at DESC');
+  const items = result.rows.map(mapFinalProduct);
+  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  const lowStockCount = items.filter(i => i.quantity <= i.minStock && i.quantity > 0).length;
+  const outOfStockCount = items.filter(i => i.quantity <= 0).length;
+  const overview = [
+    { id: 'fp-total', label: 'عدد الأصناف', value: items.length, type: 'number', helper: 'صنف مسجل', tone: 'calm' },
+    { id: 'fp-qty', label: 'إجمالي الكميات', value: totalQty, type: 'number', helper: 'وحدة في المخزن', tone: 'accent' },
+    { id: 'fp-low', label: 'مخزون منخفض', value: lowStockCount, type: 'number', helper: 'تحتاج إعادة تعبئة', tone: 'warning' },
+    { id: 'fp-out', label: 'نفد المخزون', value: outOfStockCount, type: 'number', helper: 'أصناف غير متوفرة', tone: 'alert' }
+  ];
+  return { overview, items };
+}
+
+export async function createFinalProductRecord(payload) {
+  const id = await nextId('FPS', 'final_product_store');
+  const text = `INSERT INTO final_product_store (id, product_name, category, quantity, unit, min_stock, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`;
+  const values = [id, payload.productName||'', payload.category||'', Number(payload.quantity||0), payload.unit||'قطعة', Number(payload.minStock||0), payload.status||'متوفر', payload.notes||''];
+  const result = await query(text, values);
+  return mapFinalProduct(result.rows[0]);
+}
+
+export async function updateFinalProductRecord(id, payload) {
+  const text = `UPDATE final_product_store SET product_name=COALESCE($2,product_name), category=COALESCE($3,category), quantity=COALESCE($4,quantity), unit=COALESCE($5,unit), min_stock=COALESCE($6,min_stock), status=COALESCE($7,status), notes=COALESCE($8,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.productName, payload.category, payload.quantity!==undefined?Number(payload.quantity):undefined, payload.unit, payload.minStock!==undefined?Number(payload.minStock):undefined, payload.status, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapFinalProduct(result.rows[0]);
+}
+
+export async function deleteFinalProductRecord(id) {
+  const result = await query('DELETE FROM final_product_store WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Raw Materials & Packaging Store ───────────────────────────────────────────
+
+function mapRawMaterial(row) {
+  return {
+    id: row.id,
+    materialName: row.material_name,
+    category: row.category || '',
+    quantity: Number(row.quantity),
+    unit: row.unit || 'كجم',
+    minStock: Number(row.min_stock),
+    status: row.status,
+    notes: row.notes || ''
+  };
+}
+
+export async function getRawMaterialsStoreData() {
+  const result = await query('SELECT * FROM raw_materials_store ORDER BY created_at DESC');
+  const items = result.rows.map(mapRawMaterial);
+  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  const lowStockCount = items.filter(i => i.quantity <= i.minStock && i.quantity > 0).length;
+  const outOfStockCount = items.filter(i => i.quantity <= 0).length;
+  const overview = [
+    { id: 'rm-total', label: 'عدد الخامات', value: items.length, type: 'number', helper: 'خامة مسجلة', tone: 'calm' },
+    { id: 'rm-qty', label: 'إجمالي الكميات', value: totalQty, type: 'number', helper: 'وحدة في المخزن', tone: 'accent' },
+    { id: 'rm-low', label: 'مخزون منخفض', value: lowStockCount, type: 'number', helper: 'تحتاج طلب شراء', tone: 'warning' },
+    { id: 'rm-out', label: 'نفد المخزون', value: outOfStockCount, type: 'number', helper: 'خامات غير متوفرة', tone: 'alert' }
+  ];
+  return { overview, items };
+}
+
+export async function createRawMaterialRecord(payload) {
+  const id = await nextId('RMS', 'raw_materials_store');
+  const text = `INSERT INTO raw_materials_store (id, material_name, category, quantity, unit, min_stock, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`;
+  const values = [id, payload.materialName||'', payload.category||'', Number(payload.quantity||0), payload.unit||'كجم', Number(payload.minStock||0), payload.status||'متوفر', payload.notes||''];
+  const result = await query(text, values);
+  return mapRawMaterial(result.rows[0]);
+}
+
+export async function updateRawMaterialRecord(id, payload) {
+  const text = `UPDATE raw_materials_store SET material_name=COALESCE($2,material_name), category=COALESCE($3,category), quantity=COALESCE($4,quantity), unit=COALESCE($5,unit), min_stock=COALESCE($6,min_stock), status=COALESCE($7,status), notes=COALESCE($8,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.materialName, payload.category, payload.quantity!==undefined?Number(payload.quantity):undefined, payload.unit, payload.minStock!==undefined?Number(payload.minStock):undefined, payload.status, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapRawMaterial(result.rows[0]);
+}
+
+export async function deleteRawMaterialRecord(id) {
+  const result = await query('DELETE FROM raw_materials_store WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Rep Sub-Stores ────────────────────────────────────────────────────────────
+
+function mapRepSubStore(row) {
+  return {
+    id: row.id,
+    repName: row.rep_name,
+    productName: row.product_name,
+    quantity: Number(row.quantity),
+    deliveryDate: row.delivery_date ? new Date(row.delivery_date).toISOString().split('T')[0] : null,
+    status: row.status,
+    notes: row.notes || ''
+  };
+}
+
+export async function getRepSubStoresData() {
+  const result = await query('SELECT * FROM rep_sub_stores ORDER BY created_at DESC');
+  const items = result.rows.map(mapRepSubStore);
+  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  const deliveredCount = items.filter(i => i.status === 'مسلّم').length;
+  const reps = new Set(items.map(i => i.repName)).size;
+  const overview = [
+    { id: 'rss-reps', label: 'عدد المناديب', value: reps, type: 'number', helper: 'مندوب نشط', tone: 'calm' },
+    { id: 'rss-qty', label: 'إجمالي الكميات', value: totalQty, type: 'number', helper: 'وحدة لدى المناديب', tone: 'accent' },
+    { id: 'rss-delivered', label: 'تم التسليم', value: deliveredCount, type: 'number', helper: 'عملية تسليم', tone: 'neutral' }
+  ];
+  return { overview, items };
+}
+
+export async function createRepSubStoreRecord(payload) {
+  const id = await nextId('RSS', 'rep_sub_stores');
+  const text = `INSERT INTO rep_sub_stores (id, rep_name, product_name, quantity, delivery_date, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`;
+  const values = [id, payload.repName||'', payload.productName||'', Number(payload.quantity||0), payload.deliveryDate||null, payload.status||'مسلّم', payload.notes||''];
+  const result = await query(text, values);
+  return mapRepSubStore(result.rows[0]);
+}
+
+export async function updateRepSubStoreRecord(id, payload) {
+  const text = `UPDATE rep_sub_stores SET rep_name=COALESCE($2,rep_name), product_name=COALESCE($3,product_name), quantity=COALESCE($4,quantity), delivery_date=COALESCE($5,delivery_date), status=COALESCE($6,status), notes=COALESCE($7,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.repName, payload.productName, payload.quantity!==undefined?Number(payload.quantity):undefined, payload.deliveryDate, payload.status, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapRepSubStore(result.rows[0]);
+}
+
+export async function deleteRepSubStoreRecord(id) {
+  const result = await query('DELETE FROM rep_sub_stores WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Financial Manager Custody ─────────────────────────────────────────────────
+
+function mapFinManagerCustody(row) {
+  return {
+    id: row.id,
+    employeeName: row.employee_name,
+    amount: Number(row.amount),
+    purpose: row.purpose || '',
+    custodyDate: row.custody_date ? new Date(row.custody_date).toISOString().split('T')[0] : null,
+    status: row.status,
+    notes: row.notes || ''
+  };
+}
+
+export async function getFinancialManagerCustodyData() {
+  const result = await query('SELECT * FROM financial_manager_custody ORDER BY created_at DESC');
+  const items = result.rows.map(mapFinManagerCustody);
+  const totalAmount = items.reduce((s, i) => s + i.amount, 0);
+  const activeCount = items.filter(i => i.status === 'نشطة').length;
+  const closedCount = items.filter(i => i.status === 'مغلقة').length;
+  const overview = [
+    { id: 'fmc-total', label: 'إجمالي العهد', value: totalAmount, type: 'currency', helper: 'موزّعة على الموظفين', tone: 'warning' },
+    { id: 'fmc-active', label: 'عهد نشطة', value: activeCount, type: 'number', helper: 'قيد الاستخدام', tone: 'accent' },
+    { id: 'fmc-closed', label: 'عهد مغلقة', value: closedCount, type: 'number', helper: 'تمت التسوية', tone: 'calm' }
+  ];
+  return { overview, items };
+}
+
+export async function createFinManagerCustodyRecord(payload) {
+  const id = await nextId('FMC', 'financial_manager_custody');
+  const text = `INSERT INTO financial_manager_custody (id, employee_name, amount, purpose, custody_date, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`;
+  const values = [id, payload.employeeName||'', Number(payload.amount||0), payload.purpose||'', payload.custodyDate||null, payload.status||'نشطة', payload.notes||''];
+  const result = await query(text, values);
+  return mapFinManagerCustody(result.rows[0]);
+}
+
+export async function updateFinManagerCustodyRecord(id, payload) {
+  const text = `UPDATE financial_manager_custody SET employee_name=COALESCE($2,employee_name), amount=COALESCE($3,amount), purpose=COALESCE($4,purpose), custody_date=COALESCE($5,custody_date), status=COALESCE($6,status), notes=COALESCE($7,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.employeeName, payload.amount!==undefined?Number(payload.amount):undefined, payload.purpose, payload.custodyDate, payload.status, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapFinManagerCustody(result.rows[0]);
+}
+
+export async function deleteFinManagerCustodyRecord(id) {
+  const result = await query('DELETE FROM financial_manager_custody WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Raw Materials Purchases ───────────────────────────────────────────────────
+
+function mapRawPurchase(row) {
+  return {
+    id: row.id,
+    supplierName: row.supplier_name,
+    materialName: row.material_name,
+    quantity: Number(row.quantity),
+    unitPrice: Number(row.unit_price),
+    totalAmount: Number(row.total_amount),
+    purchaseDate: row.purchase_date ? new Date(row.purchase_date).toISOString().split('T')[0] : null,
+    invoiceNumber: row.invoice_number || '',
+    notes: row.notes || ''
+  };
+}
+
+export async function getRawMaterialsPurchasesData() {
+  const result = await query('SELECT * FROM raw_materials_purchases ORDER BY created_at DESC');
+  const items = result.rows.map(mapRawPurchase);
+  const totalSpent = items.reduce((s, i) => s + i.totalAmount, 0);
+  const suppliers = new Set(items.map(i => i.supplierName)).size;
+  const overview = [
+    { id: 'rmp-total', label: 'إجمالي المشتريات', value: totalSpent, type: 'currency', helper: 'قيمة مشتريات الخامات', tone: 'warning' },
+    { id: 'rmp-count', label: 'عدد الفواتير', value: items.length, type: 'number', helper: 'فاتورة مسجلة', tone: 'calm' },
+    { id: 'rmp-suppliers', label: 'عدد الموردين', value: suppliers, type: 'number', helper: 'مورد نشط', tone: 'accent' }
+  ];
+  return { overview, items };
+}
+
+export async function createRawPurchaseRecord(payload) {
+  const id = await nextId('RMP', 'raw_materials_purchases');
+  const qty = Number(payload.quantity||0);
+  const up = Number(payload.unitPrice||0);
+  const text = `INSERT INTO raw_materials_purchases (id, supplier_name, material_name, quantity, unit_price, total_amount, purchase_date, invoice_number, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`;
+  const values = [id, payload.supplierName||'', payload.materialName||'', qty, up, qty*up, payload.purchaseDate||null, payload.invoiceNumber||'', payload.notes||''];
+  const result = await query(text, values);
+  return mapRawPurchase(result.rows[0]);
+}
+
+export async function updateRawPurchaseRecord(id, payload) {
+  const qty = payload.quantity!==undefined ? Number(payload.quantity) : undefined;
+  const up = payload.unitPrice!==undefined ? Number(payload.unitPrice) : undefined;
+  const total = (qty!==undefined && up!==undefined) ? qty*up : undefined;
+  const text = `UPDATE raw_materials_purchases SET supplier_name=COALESCE($2,supplier_name), material_name=COALESCE($3,material_name), quantity=COALESCE($4,quantity), unit_price=COALESCE($5,unit_price), total_amount=COALESCE($6,total_amount), purchase_date=COALESCE($7,purchase_date), invoice_number=COALESCE($8,invoice_number), notes=COALESCE($9,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.supplierName, payload.materialName, qty, up, total, payload.purchaseDate, payload.invoiceNumber, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapRawPurchase(result.rows[0]);
+}
+
+export async function deleteRawPurchaseRecord(id) {
+  const result = await query('DELETE FROM raw_materials_purchases WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Machine Maintenance Purchases ─────────────────────────────────────────────
+
+function mapMachinePurchase(row) {
+  return {
+    id: row.id,
+    supplierName: row.supplier_name,
+    description: row.description || '',
+    amount: Number(row.amount),
+    purchaseDate: row.purchase_date ? new Date(row.purchase_date).toISOString().split('T')[0] : null,
+    machineName: row.machine_name || '',
+    invoiceNumber: row.invoice_number || '',
+    notes: row.notes || ''
+  };
+}
+
+export async function getMachineMaintenancePurchasesData() {
+  const result = await query('SELECT * FROM machine_maintenance_purchases ORDER BY created_at DESC');
+  const items = result.rows.map(mapMachinePurchase);
+  const totalSpent = items.reduce((s, i) => s + i.amount, 0);
+  const machines = new Set(items.filter(i => i.machineName).map(i => i.machineName)).size;
+  const overview = [
+    { id: 'mmp-total', label: 'إجمالي تكاليف الصيانة', value: totalSpent, type: 'currency', helper: 'مشتريات صيانة المكن', tone: 'warning' },
+    { id: 'mmp-count', label: 'عدد العمليات', value: items.length, type: 'number', helper: 'عملية شراء', tone: 'calm' },
+    { id: 'mmp-machines', label: 'مكن مختلفة', value: machines, type: 'number', helper: 'ماكينة تمت صيانتها', tone: 'accent' }
+  ];
+  return { overview, items };
+}
+
+export async function createMachinePurchaseRecord(payload) {
+  const id = await nextId('MMP', 'machine_maintenance_purchases');
+  const text = `INSERT INTO machine_maintenance_purchases (id, supplier_name, description, amount, purchase_date, machine_name, invoice_number, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`;
+  const values = [id, payload.supplierName||'', payload.description||'', Number(payload.amount||0), payload.purchaseDate||null, payload.machineName||'', payload.invoiceNumber||'', payload.notes||''];
+  const result = await query(text, values);
+  return mapMachinePurchase(result.rows[0]);
+}
+
+export async function updateMachinePurchaseRecord(id, payload) {
+  const text = `UPDATE machine_maintenance_purchases SET supplier_name=COALESCE($2,supplier_name), description=COALESCE($3,description), amount=COALESCE($4,amount), purchase_date=COALESCE($5,purchase_date), machine_name=COALESCE($6,machine_name), invoice_number=COALESCE($7,invoice_number), notes=COALESCE($8,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.supplierName, payload.description, payload.amount!==undefined?Number(payload.amount):undefined, payload.purchaseDate, payload.machineName, payload.invoiceNumber, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapMachinePurchase(result.rows[0]);
+}
+
+export async function deleteMachinePurchaseRecord(id) {
+  const result = await query('DELETE FROM machine_maintenance_purchases WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Misc Purchases ────────────────────────────────────────────────────────────
+
+function mapMiscPurchase(row) {
+  return {
+    id: row.id,
+    description: row.description || '',
+    amount: Number(row.amount),
+    category: row.category || '',
+    purchaseDate: row.purchase_date ? new Date(row.purchase_date).toISOString().split('T')[0] : null,
+    receiptNumber: row.receipt_number || '',
+    notes: row.notes || ''
+  };
+}
+
+export async function getMiscPurchasesData() {
+  const result = await query('SELECT * FROM misc_purchases ORDER BY created_at DESC');
+  const items = result.rows.map(mapMiscPurchase);
+  const totalSpent = items.reduce((s, i) => s + i.amount, 0);
+  const categories = new Set(items.filter(i => i.category).map(i => i.category)).size;
+  const overview = [
+    { id: 'misc-total', label: 'إجمالي المصروفات النثرية', value: totalSpent, type: 'currency', helper: 'مجموع المشتريات', tone: 'warning' },
+    { id: 'misc-count', label: 'عدد العمليات', value: items.length, type: 'number', helper: 'عملية مسجلة', tone: 'calm' },
+    { id: 'misc-cats', label: 'تصنيفات', value: categories, type: 'number', helper: 'تصنيف مختلف', tone: 'accent' }
+  ];
+  return { overview, items };
+}
+
+export async function createMiscPurchaseRecord(payload) {
+  const id = await nextId('MSC', 'misc_purchases');
+  const text = `INSERT INTO misc_purchases (id, description, amount, category, purchase_date, receipt_number, notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`;
+  const values = [id, payload.description||'', Number(payload.amount||0), payload.category||'', payload.purchaseDate||null, payload.receiptNumber||'', payload.notes||''];
+  const result = await query(text, values);
+  return mapMiscPurchase(result.rows[0]);
+}
+
+export async function updateMiscPurchaseRecord(id, payload) {
+  const text = `UPDATE misc_purchases SET description=COALESCE($2,description), amount=COALESCE($3,amount), category=COALESCE($4,category), purchase_date=COALESCE($5,purchase_date), receipt_number=COALESCE($6,receipt_number), notes=COALESCE($7,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.description, payload.amount!==undefined?Number(payload.amount):undefined, payload.category, payload.purchaseDate, payload.receiptNumber, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapMiscPurchase(result.rows[0]);
+}
+
+export async function deleteMiscPurchaseRecord(id) {
+  const result = await query('DELETE FROM misc_purchases WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Payroll & Advances ────────────────────────────────────────────────────────
+
+function mapPayrollAdvance(row) {
+  return {
+    id: row.id,
+    employeeName: row.employee_name,
+    type: row.type,
+    amount: Number(row.amount),
+    month: row.month || '',
+    status: row.status,
+    notes: row.notes || ''
+  };
+}
+
+export async function getPayrollAdvancesData() {
+  const result = await query('SELECT * FROM payroll_advances ORDER BY created_at DESC');
+  const items = result.rows.map(mapPayrollAdvance);
+  const totalPayroll = items.filter(i => i.type === 'راتب').reduce((s, i) => s + i.amount, 0);
+  const totalAdvances = items.filter(i => i.type === 'سلفة').reduce((s, i) => s + i.amount, 0);
+  const pendingCount = items.filter(i => i.status === 'معلق').length;
+  const overview = [
+    { id: 'pa-salaries', label: 'إجمالي الرواتب', value: totalPayroll, type: 'currency', helper: 'رواتب مسجلة', tone: 'accent' },
+    { id: 'pa-advances', label: 'إجمالي السلف', value: totalAdvances, type: 'currency', helper: 'سلف مسجلة', tone: 'warning' },
+    { id: 'pa-pending', label: 'معلّقة', value: pendingCount, type: 'number', helper: 'تحتاج إجراء', tone: 'alert' }
+  ];
+  return { overview, items };
+}
+
+export async function createPayrollAdvanceRecord(payload) {
+  const id = await nextId('PAY', 'payroll_advances');
+  const text = `INSERT INTO payroll_advances (id, employee_name, type, amount, month, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`;
+  const values = [id, payload.employeeName||'', payload.type||'راتب', Number(payload.amount||0), payload.month||'', payload.status||'معلق', payload.notes||''];
+  const result = await query(text, values);
+  return mapPayrollAdvance(result.rows[0]);
+}
+
+export async function updatePayrollAdvanceRecord(id, payload) {
+  const text = `UPDATE payroll_advances SET employee_name=COALESCE($2,employee_name), type=COALESCE($3,type), amount=COALESCE($4,amount), month=COALESCE($5,month), status=COALESCE($6,status), notes=COALESCE($7,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.employeeName, payload.type, payload.amount!==undefined?Number(payload.amount):undefined, payload.month, payload.status, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapPayrollAdvance(result.rows[0]);
+}
+
+export async function deletePayrollAdvanceRecord(id) {
+  const result = await query('DELETE FROM payroll_advances WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Customer Payment Alerts ───────────────────────────────────────────────────
+
+function mapPaymentAlert(row) {
+  return {
+    id: row.id,
+    customerName: row.customer_name,
+    amount: Number(row.amount),
+    dueDate: row.due_date ? new Date(row.due_date).toISOString().split('T')[0] : null,
+    alertType: row.alert_type || 'فاتورة آجل',
+    status: row.status,
+    notes: row.notes || ''
+  };
+}
+
+export async function getCustomerPaymentAlertsData() {
+  const result = await query('SELECT * FROM customer_payment_alerts ORDER BY due_date ASC, created_at DESC');
+  const items = result.rows.map(mapPaymentAlert);
+  const totalAmount = items.reduce((s, i) => s + i.amount, 0);
+  const upcomingCount = items.filter(i => i.status === 'قادم').length;
+  const overdueCount = items.filter(i => i.status === 'متأخر').length;
+  const overview = [
+    { id: 'cpa-total', label: 'إجمالي المستحقات', value: totalAmount, type: 'currency', helper: 'مبالغ مطلوبة', tone: 'warning' },
+    { id: 'cpa-upcoming', label: 'مواعيد قادمة', value: upcomingCount, type: 'number', helper: 'تنبيه قادم', tone: 'accent' },
+    { id: 'cpa-overdue', label: 'متأخرة', value: overdueCount, type: 'number', helper: 'تحتاج متابعة عاجلة', tone: 'alert' }
+  ];
+  return { overview, items };
+}
+
+export async function createPaymentAlertRecord(payload) {
+  const id = await nextId('CPA', 'customer_payment_alerts');
+  const text = `INSERT INTO customer_payment_alerts (id, customer_name, amount, due_date, alert_type, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`;
+  const values = [id, payload.customerName||'', Number(payload.amount||0), payload.dueDate||null, payload.alertType||'فاتورة آجل', payload.status||'قادم', payload.notes||''];
+  const result = await query(text, values);
+  return mapPaymentAlert(result.rows[0]);
+}
+
+export async function updatePaymentAlertRecord(id, payload) {
+  const text = `UPDATE customer_payment_alerts SET customer_name=COALESCE($2,customer_name), amount=COALESCE($3,amount), due_date=COALESCE($4,due_date), alert_type=COALESCE($5,alert_type), status=COALESCE($6,status), notes=COALESCE($7,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.customerName, payload.amount!==undefined?Number(payload.amount):undefined, payload.dueDate, payload.alertType, payload.status, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapPaymentAlert(result.rows[0]);
+}
+
+export async function deletePaymentAlertRecord(id) {
+  const result = await query('DELETE FROM customer_payment_alerts WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
