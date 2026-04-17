@@ -7,7 +7,7 @@ const { Pool } = pg;
 
 const dataMode = (process.env.DATA_MODE ?? 'local').toLowerCase();
 
-const pool = new Pool({
+const pool = dataMode === 'local' ? null : new Pool({
   host: process.env.DB_HOST ?? 'localhost',
   port: Number(process.env.DB_PORT ?? 5432),
   database: process.env.DB_NAME ?? 'asmdaproje_db',

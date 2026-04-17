@@ -80,12 +80,15 @@ dotenv.config();
 const app = express();
 const port = Number(process.env.PORT ?? 5000);
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
-const swaggerSpec = createSwaggerSpec(`http://localhost:${port}`);
+const isVercel = !!process.env.VERCEL;
+const swaggerSpec = createSwaggerSpec(isVercel ? '' : `http://localhost:${port}`);
 
 app.use(
-  cors({
-    origin: frontendUrl
-  })
+  cors(
+    isVercel
+      ? { origin: true }
+      : { origin: frontendUrl }
+  )
 );
 app.use(express.json());
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
