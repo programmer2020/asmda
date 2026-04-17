@@ -15,6 +15,7 @@ const views = [
   'checks',
   'returns',
   'customer-payment-alerts',
+  'free-samples',
   'credit-sales',
   'price-list',
   'custodies',
@@ -86,6 +87,11 @@ const navigation = [
     id: 'customer-payment-alerts',
     label: 'تنبيه بمواعيد الدفع الخاصة بالعملاء',
     helper: 'متابعة تنبيهات الاستحقاق والتحصيل'
+  },
+  {
+    id: 'free-samples',
+    label: 'احتساب العينات المجانية',
+    helper: 'متابعة العينات المجانية المصروفة للعملاء'
   },
   {
     id: 'credit-sales',
@@ -189,6 +195,7 @@ const initialMachinePurchases = { overview: [], items: [] };
 const initialMiscPurchases = { overview: [], items: [] };
 const initialPayrollAdvances = { overview: [], items: [] };
 const initialPaymentAlerts = { overview: [], items: [] };
+const initialFreeSamples = { overview: [], items: [] };
 
 const initialFinalProductForm = { productName: '', category: '', quantity: '', unit: 'قطعة', minStock: '', status: 'متوفر', notes: '' };
 const initialRawMaterialForm = { materialName: '', category: '', quantity: '', unit: 'كجم', minStock: '', status: 'متوفر', notes: '' };
@@ -199,6 +206,7 @@ const initialMachinePurchaseForm = { supplierName: '', description: '', amount: 
 const initialMiscPurchaseForm = { description: '', amount: '', category: '', purchaseDate: '', receiptNumber: '', notes: '' };
 const initialPayrollAdvanceForm = { employeeName: '', type: 'راتب', amount: '', month: '', status: 'معلق', notes: '' };
 const initialPaymentAlertForm = { customerName: '', amount: '', dueDate: '', alertType: 'فاتورة آجل', status: 'قادم', notes: '' };
+const initialFreeSampleForm = { customerName: '', productName: '', quantity: '1', unit: 'قطعة', reason: '', sampleDate: '', notes: '' };
 
 const initialSalesForm = {
   customerName: '',
@@ -1561,6 +1569,7 @@ export default function App() {
   const [miscPurchases, setMiscPurchases] = useState(initialMiscPurchases);
   const [payrollAdvances, setPayrollAdvances] = useState(initialPayrollAdvances);
   const [paymentAlerts, setPaymentAlerts] = useState(initialPaymentAlerts);
+  const [freeSamples, setFreeSamples] = useState(initialFreeSamples);
 
   const [fpForm, setFpForm] = useState(initialFinalProductForm);
   const [rmForm, setRmForm] = useState(initialRawMaterialForm);
@@ -1571,6 +1580,7 @@ export default function App() {
   const [mscForm, setMscForm] = useState(initialMiscPurchaseForm);
   const [payForm, setPayForm] = useState(initialPayrollAdvanceForm);
   const [cpaForm, setCpaForm] = useState(initialPaymentAlertForm);
+  const [fsForm, setFsForm] = useState(initialFreeSampleForm);
 
   const [fpEditingId, setFpEditingId] = useState('');
   const [rmEditingId, setRmEditingId] = useState('');
@@ -1581,6 +1591,7 @@ export default function App() {
   const [mscEditingId, setMscEditingId] = useState('');
   const [payEditingId, setPayEditingId] = useState('');
   const [cpaEditingId, setCpaEditingId] = useState('');
+  const [fsEditingId, setFsEditingId] = useState('');
 
   const [fpSaving, setFpSaving] = useState(false);
   const [rmSaving, setRmSaving] = useState(false);
@@ -1591,6 +1602,7 @@ export default function App() {
   const [mscSaving, setMscSaving] = useState(false);
   const [paySaving, setPaySaving] = useState(false);
   const [cpaSaving, setCpaSaving] = useState(false);
+  const [fsSaving, setFsSaving] = useState(false);
 
   const [fpFormOpen, setFpFormOpen] = useState(false);
   const [rmFormOpen, setRmFormOpen] = useState(false);
@@ -1601,6 +1613,7 @@ export default function App() {
   const [mscFormOpen, setMscFormOpen] = useState(false);
   const [payFormOpen, setPayFormOpen] = useState(false);
   const [cpaFormOpen, setCpaFormOpen] = useState(false);
+  const [fsFormOpen, setFsFormOpen] = useState(false);
 
   // Modal visibility state
   const [salesFormOpen, setSalesFormOpen] = useState(false);
@@ -1631,7 +1644,7 @@ export default function App() {
 
   async function loadWorkspace() {
     const [dashboardData, salesData, creditData, returnsData, priceListData, custodiesData, checksData,
-      fpData, rmData, rssData, fmcData, rmpData, mmpData, mscData, payData, cpaData
+      fpData, rmData, rssData, fmcData, rmpData, mmpData, mscData, payData, cpaData, fsData
     ] = await Promise.all([
       fetchJson(buildUrl('/dashboard')),
       fetchJson(buildUrl('/sales')),
@@ -1648,7 +1661,8 @@ export default function App() {
       fetchJson(buildUrl('/machine-maintenance-purchases')),
       fetchJson(buildUrl('/misc-purchases')),
       fetchJson(buildUrl('/payroll-advances')),
-      fetchJson(buildUrl('/customer-payment-alerts'))
+      fetchJson(buildUrl('/customer-payment-alerts')),
+      fetchJson(buildUrl('/free-samples'))
     ]);
 
     setDashboard(dashboardData);
@@ -1667,6 +1681,7 @@ export default function App() {
     setMiscPurchases(mscData);
     setPayrollAdvances(payData);
     setPaymentAlerts(cpaData);
+    setFreeSamples(fsData);
 
     // Update notification for today's pending checks
     const today = getTodayLocalDateKey();
@@ -2484,6 +2499,11 @@ export default function App() {
     i => ({ customerName: i.customerName, amount: String(i.amount), dueDate: i.dueDate||'', alertType: i.alertType, status: i.status, notes: i.notes||'' }),
     'cpa', 'التنبيه');
 
+  const fsCrud = makeModuleCrud('/free-samples', setFreeSamples, fsForm, setFsForm, initialFreeSampleForm, fsEditingId, setFsEditingId, fsSaving, setFsSaving, fsFormOpen, setFsFormOpen,
+    f => ({ ...f, quantity: Number(f.quantity||1) }),
+    i => ({ customerName: i.customerName, productName: i.productName, quantity: String(i.quantity), unit: i.unit, reason: i.reason||'', sampleDate: i.sampleDate||'', notes: i.notes||'' }),
+    'fs', 'العينة');
+
   async function confirmTransactionDelete() {
     const id = deleteTarget.id;
     setDeleteTarget(null);
@@ -2518,6 +2538,7 @@ export default function App() {
     else if (deleteTarget.type === 'msc') mscCrud.confirmDelete();
     else if (deleteTarget.type === 'pay') payCrud.confirmDelete();
     else if (deleteTarget.type === 'cpa') cpaCrud.confirmDelete();
+    else if (deleteTarget.type === 'fs') fsCrud.confirmDelete();
   }
 
   const deleteMessages = {
@@ -2536,7 +2557,8 @@ export default function App() {
     mmp: 'هل أنت متأكد من حذف عملية الصيانة؟ لا يمكن التراجع عن هذا الإجراء.',
     msc: 'هل أنت متأكد من حذف هذا المصروف؟ لا يمكن التراجع عن هذا الإجراء.',
     pay: 'هل أنت متأكد من حذف هذا السجل؟ لا يمكن التراجع عن هذا الإجراء.',
-    cpa: 'هل أنت متأكد من حذف هذا التنبيه؟ لا يمكن التراجع عن هذا الإجراء.'
+    cpa: 'هل أنت متأكد من حذف هذا التنبيه؟ لا يمكن التراجع عن هذا الإجراء.',
+    fs: 'هل أنت متأكد من حذف هذه العينة؟ لا يمكن التراجع عن هذا الإجراء.'
   };
 
   const title = navigation.find((item) => item.id === activeView)?.label ?? 'لوحة التحكم';
@@ -3125,6 +3147,51 @@ export default function App() {
               <label><span>نوع التنبيه</span><select name="alertType" value={cpaForm.alertType} onChange={cpaCrud.handleInput}>{alertTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></label>
               <label><span>الحالة</span><select name="status" value={cpaForm.status} onChange={cpaCrud.handleInput}>{alertStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={cpaForm.notes} onChange={cpaCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'free-samples' ? (
+          <GenericCrudView
+            data={freeSamples}
+            eyebrow="العينات المجانية"
+            headline="احتساب العينات المجانية المصروفة للعملاء"
+            addLabel="إضافة عينة"
+            emptyLabel="لا توجد عينات مسجلة بعد."
+            formTitle="عينة مجانية"
+            editingId={fsEditingId}
+            saving={fsSaving}
+            isFormOpen={fsFormOpen}
+            onOpenForm={fsCrud.openForm}
+            onCloseForm={fsCrud.closeForm}
+            onSubmit={fsCrud.handleSubmit}
+            form={fsForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.customerName}</strong>
+                    <span className="status-chip neutral">{item.productName}</span>
+                  </div>
+                  <p>الكمية: {item.quantity} {item.unit}{item.reason ? ` · السبب: ${item.reason}` : ''}</p>
+                  <small>{formatDate(item.sampleDate)}</small>
+                </div>
+                <div className="table-side">
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => fsCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => fsCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم العميل</span><input name="customerName" value={fsForm.customerName} onChange={fsCrud.handleInput} required /></label>
+              <label><span>اسم المنتج</span><input name="productName" value={fsForm.productName} onChange={fsCrud.handleInput} required /></label>
+              <label><span>الكمية</span><input name="quantity" type="number" min="1" value={fsForm.quantity} onChange={fsCrud.handleInput} /></label>
+              <label><span>الوحدة</span><input name="unit" value={fsForm.unit} onChange={fsCrud.handleInput} /></label>
+              <label><span>السبب</span><input name="reason" value={fsForm.reason} onChange={fsCrud.handleInput} placeholder="مثال: ترويج، تجربة.." /></label>
+              <label><span>التاريخ</span><input name="sampleDate" type="date" value={fsForm.sampleDate} onChange={fsCrud.handleInput} /></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={fsForm.notes} onChange={fsCrud.handleInput} /></label>
             </>}
           />
         ) : null}

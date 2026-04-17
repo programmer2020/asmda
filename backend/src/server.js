@@ -66,7 +66,11 @@ import {
   getCustomerPaymentAlertsData,
   createPaymentAlertRecord,
   updatePaymentAlertRecord,
-  deletePaymentAlertRecord
+  deletePaymentAlertRecord,
+  getFreeSamplesData,
+  createFreeSampleRecord,
+  updateFreeSampleRecord,
+  deleteFreeSampleRecord
 } from './data/erbStore.js';
 import { getDatabaseStatus, safeQuery } from './db.js';
 import { createSwaggerSpec } from './swagger.js';
@@ -705,6 +709,20 @@ app.put('/api/customer-payment-alerts/:id', async (req, res) => {
   try { const u = await updatePaymentAlertRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
 });
 app.delete('/api/customer-payment-alerts/:id', async (req, res) => { try { const d = await deletePaymentAlertRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Free Samples ─────────────────────────────────────────────────────────────
+app.get('/api/free-samples', async (_req, res) => { try { res.json(await getFreeSamplesData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/free-samples', async (req, res) => {
+  if (!req.body.customerName) { res.status(400).json({ message: 'يرجى إدخال اسم العميل.' }); return; }
+  if (!req.body.productName) { res.status(400).json({ message: 'يرجى إدخال اسم المنتج.' }); return; }
+  try { res.status(201).json(await createFreeSampleRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/free-samples/:id', async (req, res) => {
+  if (!req.body.customerName) { res.status(400).json({ message: 'يرجى إدخال اسم العميل.' }); return; }
+  if (!req.body.productName) { res.status(400).json({ message: 'يرجى إدخال اسم المنتج.' }); return; }
+  try { const u = await updateFreeSampleRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/free-samples/:id', async (req, res) => { try { const d = await deleteFreeSampleRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
 
 app.listen(port, () => {
   console.log(`ERB backend is running on http://localhost:${port}`);

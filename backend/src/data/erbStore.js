@@ -1311,3 +1311,54 @@ export async function deletePaymentAlertRecord(id) {
   return result.rowCount > 0;
 }
 
+// ── Free Samples ─────────────────────────────────────────────────────────────
+
+function mapFreeSample(row) {
+  return {
+    id: row.id,
+    customerName: row.customer_name,
+    productName: row.product_name,
+    quantity: Number(row.quantity),
+    unit: row.unit || 'قطعة',
+    reason: row.reason || '',
+    sampleDate: row.sample_date ? new Date(row.sample_date).toISOString().split('T')[0] : null,
+    notes: row.notes || ''
+  };
+}
+
+export async function getFreeSamplesData() {
+  const result = await query('SELECT * FROM free_samples ORDER BY created_at DESC');
+  const items = result.rows.map(mapFreeSample);
+  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  const uniqueCustomers = new Set(items.map(i => i.customerName)).size;
+  const uniqueProducts = new Set(items.map(i => i.productName)).size;
+  const overview = [
+    { id: 'fs-total', label: 'إجمالي العينات', value: items.length, type: 'number', helper: 'عينة مسجلة', tone: 'calm' },
+    { id: 'fs-qty', label: 'إجمالي الكميات', value: totalQty, type: 'number', helper: 'وحدة تم صرفها', tone: 'accent' },
+    { id: 'fs-customers', label: 'عدد العملاء', value: uniqueCustomers, type: 'number', helper: 'عميل استلم عينات', tone: 'warning' },
+    { id: 'fs-products', label: 'أصناف مختلفة', value: uniqueProducts, type: 'number', helper: 'منتج تم توزيعه', tone: 'accent' }
+  ];
+  return { overview, items };
+}
+
+export async function createFreeSampleRecord(payload) {
+  const id = await nextId('FSM', 'free_samples');
+  const text = `INSERT INTO free_samples (id, customer_name, product_name, quantity, unit, reason, sample_date, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`;
+  const values = [id, payload.customerName||'', payload.productName||'', Number(payload.quantity||1), payload.unit||'قطعة', payload.reason||'', payload.sampleDate||null, payload.notes||''];
+  const result = await query(text, values);
+  return mapFreeSample(result.rows[0]);
+}
+
+export async function updateFreeSampleRecord(id, payload) {
+  const text = `UPDATE free_samples SET customer_name=COALESCE($2,customer_name), product_name=COALESCE($3,product_name), quantity=COALESCE($4,quantity), unit=COALESCE($5,unit), reason=COALESCE($6,reason), sample_date=COALESCE($7,sample_date), notes=COALESCE($8,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.customerName, payload.productName, payload.quantity!==undefined?Number(payload.quantity):undefined, payload.unit, payload.reason, payload.sampleDate, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapFreeSample(result.rows[0]);
+}
+
+export async function deleteFreeSampleRecord(id) {
+  const result = await query('DELETE FROM free_samples WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
