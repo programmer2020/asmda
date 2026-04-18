@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
-const apiBase = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '');
+let _nextId = 1;
+function genId() { return String(_nextId++); }
 const views = [
   'dashboard',
   'final-product-store',
@@ -265,9 +266,7 @@ const initialTransactionForm = {
   notes: ''
 };
 
-function buildUrl(path) {
-  return `${apiBase}${path}`;
-}
+function buildUrl() { return ''; }
 
 function getInitialView() {
   const hash = window.location.hash.replace('#', '').toLowerCase();
@@ -387,39 +386,6 @@ function getCheckStatusTone(status) {
   if (status === 'محصّل') return 'success';
   if (status === 'مرتجع') return 'danger';
   return 'warning';
-}
-
-async function fetchJson(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers ?? {})
-    }
-  });
-
-  if (!response.ok) {
-    let message = 'حدث خطأ أثناء تنفيذ الطلب.';
-
-    try {
-      const data = await response.json();
-      message = data.message ?? message;
-    } catch {
-      // Ignore JSON parse failures and use fallback message.
-    }
-
-    throw new Error(message);
-  }
-
-  if (response.status === 204) {
-    return null;
-  }
-
-  return response.json();
-}
-
-function safeFetch(url, fallback) {
-  return fetchJson(url).catch(() => fallback);
 }
 
 function Modal({ isOpen, onClose, title, children }) {
@@ -1646,88 +1612,12 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  async function loadWorkspace() {
-    const emptyList = { overview: [], items: [] };
-    const [dashboardData, salesData, creditData, returnsData, priceListData, custodiesData, checksData,
-      fpData, rmData, rssData, fmcData, rmpData, mmpData, mscData, payData, cpaData, fsData
-    ] = await Promise.all([
-      safeFetch(buildUrl('/dashboard'), initialDashboard),
-      safeFetch(buildUrl('/sales'), initialSales),
-      safeFetch(buildUrl('/credit-sales'), initialCreditSales),
-      safeFetch(buildUrl('/returns'), initialReturns),
-      safeFetch(buildUrl('/price-list'), initialPriceList),
-      safeFetch(buildUrl('/custodies'), initialCustodies),
-      safeFetch(buildUrl('/checks'), initialChecks),
-      safeFetch(buildUrl('/final-product-store'), emptyList),
-      safeFetch(buildUrl('/raw-materials-store'), emptyList),
-      safeFetch(buildUrl('/rep-sub-stores'), emptyList),
-      safeFetch(buildUrl('/financial-manager-custody'), emptyList),
-      safeFetch(buildUrl('/raw-materials-purchases'), emptyList),
-      safeFetch(buildUrl('/machine-maintenance-purchases'), emptyList),
-      safeFetch(buildUrl('/misc-purchases'), emptyList),
-      safeFetch(buildUrl('/payroll-advances'), emptyList),
-      safeFetch(buildUrl('/customer-payment-alerts'), emptyList),
-      safeFetch(buildUrl('/free-samples'), emptyList)
-    ]);
-
-    setDashboard(dashboardData);
-    setSales(salesData);
-    setCreditSales(creditData);
-    setReturns(returnsData);
-    setPriceList(priceListData);
-    setCustodies(custodiesData);
-    setChecks(checksData);
-    setFinalProductStore(fpData);
-    setRawMaterialsStore(rmData);
-    setRepSubStores(rssData);
-    setFinManagerCustody(fmcData);
-    setRawPurchases(rmpData);
-    setMachinePurchases(mmpData);
-    setMiscPurchases(mscData);
-    setPayrollAdvances(payData);
-    setPaymentAlerts(cpaData);
-    setFreeSamples(fsData);
-
-    // Update notification for today's pending checks
-    const today = getTodayLocalDateKey();
-    const todayPending = checksData.items.filter(
-      (item) => item.collectionDate === today && item.status === 'معلق'
-    );
-    if (todayPending.length > 0) {
-      setCheckNotification({
-        count: todayPending.length,
-        total: todayPending.reduce((s, c) => s + c.amount, 0)
-      });
-      setNotificationDismissed(false);
-    } else {
-      setCheckNotification(null);
-    }
+  function loadWorkspace() {
+    // Static mode – no backend calls
   }
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError('');
-        await loadWorkspace();
-      } catch (requestError) {
-        if (!cancelled) {
-          setError(requestError.message);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadData();
-
-    return () => {
-      cancelled = true;
-    };
+    setLoading(false);
   }, []);
 
   function navigateTo(view) {
@@ -1913,29 +1803,6 @@ export default function App() {
     setStatement(buildCustomerStatement(statement.customerName, sales, creditSales, returns));
   }, [sales, creditSales, returns]);
 
-  // Periodic notification refresh every 5 minutes
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const checksData = await fetchJson(buildUrl('/checks'));
-        setChecks(checksData);
-        const today = getTodayLocalDateKey();
-        const todayPending = checksData.items.filter(
-          (item) => item.collectionDate === today && item.status === 'معلق'
-        );
-        if (todayPending.length > 0) {
-          setCheckNotification({ count: todayPending.length, total: todayPending.reduce((s, c) => s + c.amount, 0) });
-          setNotificationDismissed(false);
-        } else {
-          setCheckNotification(null);
-        }
-      } catch {
-        // silently ignore background refresh errors
-      }
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   // ── Checks ─────────────────────────────────────────────
   function handleCheckInputChange(event) {
     const { name, value } = event.target;
@@ -1975,11 +1842,11 @@ export default function App() {
       setError('');
       setNotice('');
       const payload = { ...checkForm, amount: Number(checkForm.amount) };
-      await fetchJson(
-        checkEditingId ? buildUrl(`/checks/${checkEditingId}`) : buildUrl('/checks'),
-        { method: checkEditingId ? 'PUT' : 'POST', body: JSON.stringify(payload) }
-      );
-      await loadWorkspace();
+      if (checkEditingId) {
+        setChecks(prev => ({ ...prev, items: prev.items.map(i => i.id === checkEditingId ? { ...i, ...payload } : i) }));
+      } else {
+        setChecks(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload }] }));
+      }
       const msg = checkEditingId ? 'تم تعديل الشيك بنجاح.' : 'تمت إضافة الشيك بنجاح.';
       closeCheckForm();
       setNotice(msg);
@@ -2000,8 +1867,7 @@ export default function App() {
     try {
       setError('');
       setNotice('');
-      await fetchJson(buildUrl(`/checks/${id}`), { method: 'DELETE' });
-      await loadWorkspace();
+      setChecks(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
       setNotice('تم حذف الشيك بنجاح.');
     } catch (requestError) {
       setError(requestError.message);
@@ -2047,11 +1913,11 @@ export default function App() {
       setError('');
       setNotice('');
       const payload = { ...salesForm, amount: Number(salesForm.amount) };
-      await fetchJson(
-        salesEditingId ? buildUrl(`/sales/${salesEditingId}`) : buildUrl('/sales'),
-        { method: salesEditingId ? 'PUT' : 'POST', body: JSON.stringify(payload) }
-      );
-      await loadWorkspace();
+      if (salesEditingId) {
+        setSales(prev => ({ ...prev, items: prev.items.map(i => i.id === salesEditingId ? { ...i, ...payload } : i) }));
+      } else {
+        setSales(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload }] }));
+      }
       const msg = salesEditingId ? 'تم تعديل عملية البيع بنجاح.' : 'تمت إضافة عملية البيع بنجاح.';
       closeSalesForm();
       setNotice(msg);
@@ -2072,8 +1938,7 @@ export default function App() {
     try {
       setError('');
       setNotice('');
-      await fetchJson(buildUrl(`/sales/${id}`), { method: 'DELETE' });
-      await loadWorkspace();
+      setSales(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
       setNotice('تم حذف عملية البيع بنجاح.');
     } catch (requestError) {
       setError(requestError.message);
@@ -2124,11 +1989,12 @@ export default function App() {
         amount: Number(creditForm.amount),
         paidAmount: Number(creditForm.paidAmount)
       };
-      await fetchJson(
-        creditEditingId ? buildUrl(`/credit-sales/${creditEditingId}`) : buildUrl('/credit-sales'),
-        { method: creditEditingId ? 'PUT' : 'POST', body: JSON.stringify(payload) }
-      );
-      await loadWorkspace();
+      const remainingAmount = payload.amount - payload.paidAmount;
+      if (creditEditingId) {
+        setCreditSales(prev => ({ ...prev, items: prev.items.map(i => i.id === creditEditingId ? { ...i, ...payload, remainingAmount } : i) }));
+      } else {
+        setCreditSales(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload, remainingAmount }] }));
+      }
       const msg = creditEditingId ? 'تم تعديل سجل مبيعات الآجل بنجاح.' : 'تمت إضافة سجل مبيعات الآجل بنجاح.';
       closeCreditForm();
       setNotice(msg);
@@ -2149,8 +2015,7 @@ export default function App() {
     try {
       setError('');
       setNotice('');
-      await fetchJson(buildUrl(`/credit-sales/${id}`), { method: 'DELETE' });
-      await loadWorkspace();
+      setCreditSales(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
       setNotice('تم حذف سجل مبيعات الآجل بنجاح.');
     } catch (requestError) {
       setError(requestError.message);
@@ -2197,11 +2062,11 @@ export default function App() {
       setError('');
       setNotice('');
       const payload = { ...returnsForm, amount: Number(returnsForm.amount) };
-      await fetchJson(
-        returnsEditingId ? buildUrl(`/returns/${returnsEditingId}`) : buildUrl('/returns'),
-        { method: returnsEditingId ? 'PUT' : 'POST', body: JSON.stringify(payload) }
-      );
-      await loadWorkspace();
+      if (returnsEditingId) {
+        setReturns(prev => ({ ...prev, items: prev.items.map(i => i.id === returnsEditingId ? { ...i, ...payload } : i) }));
+      } else {
+        setReturns(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload }] }));
+      }
       const msg = returnsEditingId ? 'تم تعديل المرتجع بنجاح.' : 'تمت إضافة المرتجع بنجاح.';
       closeReturnsForm();
       setNotice(msg);
@@ -2222,8 +2087,7 @@ export default function App() {
     try {
       setError('');
       setNotice('');
-      await fetchJson(buildUrl(`/returns/${id}`), { method: 'DELETE' });
-      await loadWorkspace();
+      setReturns(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
       setNotice('تم حذف المرتجع بنجاح.');
     } catch (requestError) {
       setError(requestError.message);
@@ -2271,11 +2135,11 @@ export default function App() {
         purchasePrice: Number(priceListForm.purchasePrice),
         sellingPrice: Number(priceListForm.sellingPrice)
       };
-      await fetchJson(
-        priceListEditingId ? buildUrl(`/price-list/${priceListEditingId}`) : buildUrl('/price-list'),
-        { method: priceListEditingId ? 'PUT' : 'POST', body: JSON.stringify(payload) }
-      );
-      await loadWorkspace();
+      if (priceListEditingId) {
+        setPriceList(prev => ({ ...prev, items: prev.items.map(i => i.id === priceListEditingId ? { ...i, ...payload } : i) }));
+      } else {
+        setPriceList(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload }] }));
+      }
       const msg = priceListEditingId ? 'تم تعديل المنتج بنجاح.' : 'تمت إضافة المنتج بنجاح.';
       closePriceListForm();
       setNotice(msg);
@@ -2296,8 +2160,7 @@ export default function App() {
     try {
       setError('');
       setNotice('');
-      await fetchJson(buildUrl(`/price-list/${id}`), { method: 'DELETE' });
-      await loadWorkspace();
+      setPriceList(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
       setNotice('تم حذف المنتج بنجاح.');
     } catch (requestError) {
       setError(requestError.message);
@@ -2347,11 +2210,11 @@ export default function App() {
         ...custodyForm,
         initialAmount: Number(custodyForm.initialAmount)
       };
-      await fetchJson(
-        custodyEditingId ? buildUrl(`/custodies/${custodyEditingId}`) : buildUrl('/custodies'),
-        { method: custodyEditingId ? 'PUT' : 'POST', body: JSON.stringify(payload) }
-      );
-      await loadWorkspace();
+      if (custodyEditingId) {
+        setCustodies(prev => ({ ...prev, items: prev.items.map(i => i.id === custodyEditingId ? { ...i, ...payload, currentBalance: payload.initialAmount } : i) }));
+      } else {
+        setCustodies(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload, currentBalance: payload.initialAmount, transactions: [] }] }));
+      }
       const msg = custodyEditingId ? 'تم تعديل العهدة بنجاح.' : 'تمت إضافة العهدة بنجاح.';
       closeCustodyForm();
       setNotice(msg);
@@ -2372,8 +2235,7 @@ export default function App() {
     try {
       setError('');
       setNotice('');
-      await fetchJson(buildUrl(`/custodies/${id}`), { method: 'DELETE' });
-      await loadWorkspace();
+      setCustodies(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
       setNotice('تم حذف العهدة بنجاح.');
     } catch (requestError) {
       setError(requestError.message);
@@ -2382,15 +2244,11 @@ export default function App() {
 
   async function openCustodyTransactions(id) {
     setActiveCustodyId(id);
-    try {
-      setError('');
-      const txs = await fetchJson(buildUrl(`/custodies/${id}/transactions`));
-      setActiveCustodyTransactions(txs);
-      setTransactionsModalOpen(true);
-      setTransactionForm(initialTransactionForm);
-    } catch (requestError) {
-      setError(requestError.message);
-    }
+    setError('');
+    const custody = custodies.items.find(c => c.id === id);
+    setActiveCustodyTransactions(custody?.transactions ?? []);
+    setTransactionsModalOpen(true);
+    setTransactionForm(initialTransactionForm);
   }
 
   function closeTransactionsModal() {
@@ -2414,13 +2272,13 @@ export default function App() {
         ...transactionForm,
         amount: Number(transactionForm.amount)
       };
-      await fetchJson(buildUrl(`/custodies/${activeCustodyId}/transactions`), {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      const txs = await fetchJson(buildUrl(`/custodies/${activeCustodyId}/transactions`));
-      setActiveCustodyTransactions(txs);
-      await loadWorkspace();
+      const newTx = { id: genId(), ...payload };
+      const updatedTxs = [...activeCustodyTransactions, newTx];
+      setActiveCustodyTransactions(updatedTxs);
+      setCustodies(prev => ({
+        ...prev,
+        items: prev.items.map(c => c.id === activeCustodyId ? { ...c, transactions: updatedTxs } : c)
+      }));
       setNotice('تم تسجيل الحركة بنجاح.');
       setTransactionForm(initialTransactionForm);
     } catch (requestError) {
@@ -2445,8 +2303,11 @@ export default function App() {
       try {
         setSaving(true); setError(''); setNotice('');
         const payload = mapToPayload(form);
-        await fetchJson(editingId ? buildUrl(`${apiPath}/${editingId}`) : buildUrl(apiPath), { method: editingId ? 'PUT' : 'POST', body: JSON.stringify(payload) });
-        await loadWorkspace();
+        if (editingId) {
+          setData(prev => ({ ...prev, items: prev.items.map(i => i.id === editingId ? { ...i, ...payload } : i) }));
+        } else {
+          setData(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload }] }));
+        }
         closeForm();
         setNotice(editingId ? `تم تعديل ${entityLabel} بنجاح.` : `تمت إضافة ${entityLabel} بنجاح.`);
       } catch (err) { setError(err.message); } finally { setSaving(false); }
@@ -2454,7 +2315,7 @@ export default function App() {
     function requestDelete(id) { setDeleteTarget({ type: deleteType, id }); }
     async function confirmDelete() {
       const id = deleteTarget.id; setDeleteTarget(null);
-      try { setError(''); setNotice(''); await fetchJson(buildUrl(`${apiPath}/${id}`), { method: 'DELETE' }); await loadWorkspace(); setNotice(`تم حذف ${entityLabel} بنجاح.`); } catch (err) { setError(err.message); }
+      try { setError(''); setNotice(''); setData(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) })); setNotice(`تم حذف ${entityLabel} بنجاح.`); } catch (err) { setError(err.message); }
     }
     return { handleInput, openForm, startEdit, closeForm, handleSubmit, requestDelete, confirmDelete };
   }
@@ -2515,10 +2376,12 @@ export default function App() {
     try {
       setError('');
       setNotice('');
-      await fetchJson(buildUrl(`/custodies/${activeCustodyId}/transactions/${id}`), { method: 'DELETE' });
-      const txs = await fetchJson(buildUrl(`/custodies/${activeCustodyId}/transactions`));
-      setActiveCustodyTransactions(txs);
-      await loadWorkspace();
+      const updatedTxs = activeCustodyTransactions.filter(tx => tx.id !== id);
+      setActiveCustodyTransactions(updatedTxs);
+      setCustodies(prev => ({
+        ...prev,
+        items: prev.items.map(c => c.id === activeCustodyId ? { ...c, transactions: updatedTxs } : c)
+      }));
       setNotice('تم التراجع عن الحركة بنجاح.');
     } catch (requestError) {
       setError(requestError.message);
@@ -2608,10 +2471,6 @@ export default function App() {
             </div>
             <div className="user-avatar" aria-hidden="true">{avatarInitial}</div>
           </div>
-
-          <a className="ghost-button" href="http://localhost:5001/api-docs" target="_blank" rel="noreferrer">
-            Swagger
-          </a>
         </div>
       </header>
 
