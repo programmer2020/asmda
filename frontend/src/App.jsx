@@ -1616,7 +1616,103 @@ export default function App() {
     // Static mode – no backend calls
   }
 
+  // Initialize demo data
   useEffect(() => {
+    const demoSales = {
+      overview: [
+        { id: 'sales-count', label: 'عدد الفواتير', value: 3, type: 'number', helper: 'فواتير المبيعات', tone: 'accent' },
+        { id: 'sales-total', label: 'إجمالي المبيعات', value: 45000, type: 'currency', helper: 'القيمة الإجمالية', tone: 'accent' }
+      ],
+      items: [
+        {
+          id: '1',
+          customerName: 'محمد علي',
+          productName: 'منتج أ',
+          amount: 15000,
+          status: 'مكتملة',
+          salesRep: 'أحمد محمد',
+          saleDate: '2026-04-15',
+          notes: 'تم التسليم بنجاح'
+        },
+        {
+          id: '2',
+          customerName: 'محمد علي',
+          productName: 'منتج ب',
+          amount: 20000,
+          status: 'مكتملة',
+          salesRep: 'أحمد محمد',
+          saleDate: '2026-04-18',
+          notes: ''
+        },
+        {
+          id: '3',
+          customerName: 'فاطمة أحمد',
+          productName: 'منتج ج',
+          amount: 10000,
+          status: 'جديدة',
+          salesRep: 'فرح السيد',
+          saleDate: '2026-04-20',
+          notes: 'جديدة'
+        }
+      ]
+    };
+
+    const demoCreditSales = {
+      overview: [
+        { id: 'credit-count', label: 'عدد الفواتير الآجلة', value: 2, type: 'number', helper: 'فواتير الآجل', tone: 'warning' },
+        { id: 'credit-remaining', label: 'المبلغ المستحق', value: 35000, type: 'currency', helper: 'لم يتم السداد', tone: 'alert' }
+      ],
+      items: [
+        {
+          id: 'c1',
+          customerName: 'محمد علي',
+          invoiceNumber: 'INV-001',
+          amount: 25000,
+          paidAmount: 5000,
+          status: 'مسدد جزئيا',
+          salesRep: 'أحمد محمد',
+          dueDate: '2026-05-15',
+          notes: 'دفعة أولى وصلت',
+          remainingAmount: 20000
+        },
+        {
+          id: 'c2',
+          customerName: 'فاطمة أحمد',
+          invoiceNumber: 'INV-002',
+          amount: 15000,
+          paidAmount: 0,
+          status: 'مستحقة',
+          salesRep: 'فرح السيد',
+          dueDate: '2026-04-28',
+          notes: '',
+          remainingAmount: 15000
+        }
+      ]
+    };
+
+    const demoReturns = {
+      overview: [
+        { id: 'returns-count', label: 'عدد المرتجعات', value: 1, type: 'number', helper: 'مرتجعات', tone: 'neutral' },
+        { id: 'returns-amount', label: 'قيمة المرتجعات', value: 3000, type: 'currency', helper: 'إشعارات دائنة', tone: 'calm' }
+      ],
+      items: [
+        {
+          id: 'r1',
+          customerName: 'محمد علي',
+          originalInvoiceNumber: 'INV-001',
+          amount: 3000,
+          reason: 'عيب في المنتج',
+          status: 'تم التعويض',
+          salesRep: 'أحمد محمد',
+          returnDate: '2026-04-19',
+          notes: 'تم الاستبدال بمنتج جديد'
+        }
+      ]
+    };
+
+    setSales(demoSales);
+    setCreditSales(demoCreditSales);
+    setReturns(demoReturns);
     setLoading(false);
   }, []);
 
