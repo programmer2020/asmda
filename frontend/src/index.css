@@ -302,8 +302,21 @@ textarea {
 }
 
 .topbar-actions {
-  margin-inline-start: auto;
   flex-wrap: wrap;
+}
+
+.workspace-back-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.workspace-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  padding: 6px 14px;
 }
 
 .notification-icon-button {

@@ -464,7 +464,7 @@ function PlaceholderModuleView({ title, description }) {
   );
 }
 
-function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, renderRow, form, editingId, saving, isFormOpen, onOpenForm, onCloseForm, onSubmit, formTitle, formFields }) {
+function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, renderRow, form, editingId, saving, isFormOpen, onOpenForm, onCloseForm, onSubmit, formTitle, formFields, onBack }) {
   return (
     <>
       <SummaryCards items={data.overview} />
@@ -475,7 +475,15 @@ function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, render
               <p className="eyebrow">{eyebrow}</p>
               <h3>{headline}</h3>
             </div>
-            <button type="button" className="primary-button" onClick={onOpenForm}>{addLabel}</button>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button type="button" className="primary-button" onClick={onOpenForm}>{addLabel}</button>
+              {onBack && (
+                <button type="button" className="ghost-button" onClick={onBack}>
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{ marginInlineEnd: '4px' }}><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                  رجوع
+                </button>
+              )}
+            </div>
           </div>
           <div className="table-list">
             {data.items.map(renderRow)}
@@ -623,10 +631,11 @@ function StatementView({
   );
 }
 
-function DashboardView({ dashboard, onNavigate }) {
+function DashboardView({ dashboard, onNavigate, activeView }) {
   const { meta, brand, summary, alerts, recentSales, recentCreditSales } = dashboard;
-  const quickLinks = navigation.filter((item) => item.id !== 'dashboard');
+  const quickLinks = navigation;
   const heroButtonLabels = {
+    dashboard: 'لوحة التحكم',
     sales: brand?.primaryAction ?? 'فتح صفحة المبيعات',
     'credit-sales': brand?.secondaryAction ?? 'فتح صفحة مبيعات الآجل',
     returns: 'إدارة المرتجعات',
@@ -650,7 +659,7 @@ function DashboardView({ dashboard, onNavigate }) {
               <button
                 key={item.id}
                 type="button"
-                className={item.id === 'sales' ? 'primary-button' : 'ghost-button'}
+                className={item.id === (activeView ?? 'dashboard') ? 'primary-button' : 'ghost-button'}
                 onClick={() => onNavigate(item.id)}
               >
                 {heroButtonLabels[item.id] ?? item.label}
@@ -1497,6 +1506,7 @@ function ChecksView({
 
 export default function App() {
   const [activeView, setActiveView] = useState(getInitialView);
+  const [viewHistory, setViewHistory] = useState([]);
   const [dashboard, setDashboard] = useState(initialDashboard);
   const [sales, setSales] = useState(initialSales);
   const [creditSales, setCreditSales] = useState(initialCreditSales);
@@ -1717,8 +1727,21 @@ export default function App() {
   }, []);
 
   function navigateTo(view) {
+    setViewHistory((prev) => [...prev, activeView]);
     setActiveView(view);
     window.location.hash = view;
+  }
+
+  function goBack() {
+    setViewHistory((prev) => {
+      const next = [...prev];
+      const previous = next.pop();
+      if (previous) {
+        setActiveView(previous);
+        window.location.hash = previous;
+      }
+      return next;
+    });
   }
 
   function buildCustomerStatement(customerName, currentSales, currentCreditSales, currentReturns) {
@@ -2538,10 +2561,17 @@ export default function App() {
 
       <header className="workspace-topbar card">
         <div>
-          <p className="eyebrow">الواجهة الحالية</p>
           <h2>{title}</h2>
         </div>
         <div className="topbar-actions">
+          <div className="user-profile-chip" title={loggedInEmail}>
+            <div className="user-profile-meta">
+              <span>الحساب الحالي</span>
+              <strong>{loggedInEmail}</strong>
+            </div>
+            <div className="user-avatar" aria-hidden="true">{avatarInitial}</div>
+          </div>
+
           <button
             type="button"
             className={`notification-icon-button ${notificationsCount > 0 ? 'has-alert' : ''}`}
@@ -2559,14 +2589,6 @@ export default function App() {
               <span className="notification-count">{notificationsCount > 99 ? '99+' : notificationsCount}</span>
             ) : null}
           </button>
-
-          <div className="user-profile-chip" title={loggedInEmail}>
-            <div className="user-profile-meta">
-              <span>الحساب الحالي</span>
-              <strong>{loggedInEmail}</strong>
-            </div>
-            <div className="user-avatar" aria-hidden="true">{avatarInitial}</div>
-          </div>
         </div>
       </header>
 
@@ -2597,7 +2619,7 @@ export default function App() {
         {error ? <section className="notice error">{error}</section> : null}
 
         {!loading && !error && activeView === 'dashboard' ? (
-          <DashboardView dashboard={dashboard} onNavigate={navigateTo} />
+          <DashboardView dashboard={dashboard} onNavigate={navigateTo} activeView={activeView} />
         ) : null}
 
         {!loading && !error && activeView === 'sales' ? (
@@ -2720,6 +2742,7 @@ export default function App() {
             onOpenForm={fpCrud.openForm}
             onCloseForm={fpCrud.closeForm}
             onSubmit={fpCrud.handleSubmit}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
             form={fpForm}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
@@ -2765,7 +2788,7 @@ export default function App() {
             onOpenForm={rmCrud.openForm}
             onCloseForm={rmCrud.closeForm}
             onSubmit={rmCrud.handleSubmit}
-            form={rmForm}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
@@ -2810,7 +2833,7 @@ export default function App() {
             onOpenForm={rssCrud.openForm}
             onCloseForm={rssCrud.closeForm}
             onSubmit={rssCrud.handleSubmit}
-            form={rssForm}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
@@ -2854,7 +2877,7 @@ export default function App() {
             onOpenForm={fmcCrud.openForm}
             onCloseForm={fmcCrud.closeForm}
             onSubmit={fmcCrud.handleSubmit}
-            form={fmcForm}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
@@ -2899,7 +2922,7 @@ export default function App() {
             onOpenForm={rmpCrud.openForm}
             onCloseForm={rmpCrud.closeForm}
             onSubmit={rmpCrud.handleSubmit}
-            form={rmpForm}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
@@ -2945,7 +2968,7 @@ export default function App() {
             onOpenForm={mmpCrud.openForm}
             onCloseForm={mmpCrud.closeForm}
             onSubmit={mmpCrud.handleSubmit}
-            form={mmpForm}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
@@ -2991,7 +3014,7 @@ export default function App() {
             onOpenForm={mscCrud.openForm}
             onCloseForm={mscCrud.closeForm}
             onSubmit={mscCrud.handleSubmit}
-            form={mscForm}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
@@ -3035,7 +3058,7 @@ export default function App() {
             onOpenForm={payCrud.openForm}
             onCloseForm={payCrud.closeForm}
             onSubmit={payCrud.handleSubmit}
-            form={payForm}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
@@ -3080,7 +3103,7 @@ export default function App() {
             onOpenForm={cpaCrud.openForm}
             onCloseForm={cpaCrud.closeForm}
             onSubmit={cpaCrud.handleSubmit}
-            form={cpaForm}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
@@ -3125,7 +3148,7 @@ export default function App() {
             onOpenForm={fsCrud.openForm}
             onCloseForm={fsCrud.closeForm}
             onSubmit={fsCrud.handleSubmit}
-            form={fsForm}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
