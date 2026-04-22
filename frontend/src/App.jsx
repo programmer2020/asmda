@@ -1616,6 +1616,12 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(''), 5000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
   async function loadAllData() {
     try {
       setLoading(true); setError('');
@@ -2561,7 +2567,7 @@ export default function App() {
       </aside>
 
       <main className="workspace">
-        {notice ? <section className="notice success">{notice}</section> : null}
+        {notice ? <section className="notice success" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span>{notice}</span><button type="button" onClick={() => setNotice('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: 'inherit', padding: '0 4px', lineHeight: 1 }} aria-label="إغلاق">✕</button></section> : null}
         {loading ? <section className="notice">جارٍ تحميل بيانات النظام...</section> : null}
         {error ? <section className="notice error">{error}</section> : null}
 
@@ -2785,7 +2791,6 @@ export default function App() {
                     {item.category && <span className="status-chip neutral">{item.category}</span>}
                     <span className="status-chip calm">{item.unit}</span>
                   </div>
-                  {item.notes && <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>{item.notes}</p>}
                 </div>
                 <div className="table-side">
                   <div className="row-actions">
@@ -2865,7 +2870,12 @@ export default function App() {
               </label>
               <label><span>التصنيف</span><input name="category" value={fpForm.category} onChange={fpCrud.handleInput} /></label>
               <label><span>الكمية</span><input name="quantity" type="number" min="0" value={fpForm.quantity} onChange={fpCrud.handleInput} /></label>
-              <label><span>الوحدة</span><input name="unit" value={fpForm.unit} onChange={fpCrud.handleInput} /></label>
+              <label><span>الوحدة</span>
+                <select name="unit" value={fpForm.unit} onChange={fpCrud.handleInput}>
+                  {['قطعة','كرتونة','دستة','كيلو','جرام','لتر','متر','علبة','طقم','باكيت','زجاجة','كيس','رول','صينية','شوال','برميل','جالون','كرتة'].map(u => <option key={u} value={u}>{u}</option>)}
+                  {!['قطعة','كرتونة','دستة','كيلو','جرام','لتر','متر','علبة','طقم','باكيت','زجاجة','كيس','رول','صينية','شوال','برميل','جالون','كرتة'].includes(fpForm.unit) && fpForm.unit && <option value={fpForm.unit}>{fpForm.unit}</option>}
+                </select>
+              </label>
               <label><span>الحد الأدنى</span><input name="minStock" type="number" min="0" value={fpForm.minStock} onChange={fpCrud.handleInput} /></label>
               <label><span>الحالة</span><select name="status" value={fpForm.status} onChange={fpCrud.handleInput}>{storeStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={fpForm.notes} onChange={fpCrud.handleInput} /></label>
@@ -2910,7 +2920,12 @@ export default function App() {
               <label><span>اسم الخامة</span><input name="materialName" value={rmForm.materialName} onChange={rmCrud.handleInput} required /></label>
               <label><span>التصنيف</span><input name="category" value={rmForm.category} onChange={rmCrud.handleInput} /></label>
               <label><span>الكمية</span><input name="quantity" type="number" min="0" value={rmForm.quantity} onChange={rmCrud.handleInput} /></label>
-              <label><span>الوحدة</span><input name="unit" value={rmForm.unit} onChange={rmCrud.handleInput} /></label>
+              <label><span>الوحدة</span>
+                <select name="unit" value={rmForm.unit} onChange={rmCrud.handleInput}>
+                  {['قطعة','كرتونة','دستة','كيلو','جرام','لتر','متر','علبة','طقم','باكيت','زجاجة','كيس','رول','صينية','شوال','برميل','جالون','كرتة'].map(u => <option key={u} value={u}>{u}</option>)}
+                  {!['قطعة','كرتونة','دستة','كيلو','جرام','لتر','متر','علبة','طقم','باكيت','زجاجة','كيس','رول','صينية','شوال','برميل','جالون','كرتة'].includes(rmForm.unit) && rmForm.unit && <option value={rmForm.unit}>{rmForm.unit}</option>}
+                </select>
+              </label>
               <label><span>الحد الأدنى</span><input name="minStock" type="number" min="0" value={rmForm.minStock} onChange={rmCrud.handleInput} /></label>
               <label><span>الحالة</span><select name="status" value={rmForm.status} onChange={rmCrud.handleInput}>{storeStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={rmForm.notes} onChange={rmCrud.handleInput} /></label>
