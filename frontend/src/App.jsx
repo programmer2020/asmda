@@ -1,10 +1,437 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
 
-let _nextId = 1;
+// ─── Auth helpers ────────────────────────────────────────────────
+function getStoredAuth() {
+  try {
+    const raw = localStorage.getItem('asmda_auth');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // basic expiry check (JWT exp is in seconds)
+    const payload = JSON.parse(atob(parsed.token.split('.')[1]));
+    if (payload.exp * 1000 < Date.now()) { localStorage.removeItem('asmda_auth'); return null; }
+    return parsed;
+  } catch { return null; }
+}
+function storeAuth(data) { localStorage.setItem('asmda_auth', JSON.stringify(data)); }
+function clearAuth() { localStorage.removeItem('asmda_auth'); }
+function authHeaders(token) { return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }; }
+
+// ─── Login Screen ────────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message || 'خطأ في تسجيل الدخول'); return; }
+      storeAuth(data);
+      onLogin(data);
+    } catch { setError('تعذر الاتصال بالخادم.'); } finally { setLoading(false); }
+  }
+
+  return (
+    <div dir="rtl" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg, #f4f9f6)', fontFamily: 'inherit' }}>
+      <div className="ambient ambient-one" style={{ position: 'fixed' }} />
+      <div className="ambient ambient-two" style={{ position: 'fixed' }} />
+      <div className="card" style={{ width: '100%', maxWidth: '420px', padding: '40px 36px', position: 'relative', zIndex: 1 }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <p className="eyebrow">نظام إدارة أسمدة</p>
+          <h2 style={{ margin: '8px 0 0' }}>تسجيل الدخول</h2>
+        </div>
+        {error && <div className="notice error" style={{ marginBottom: '16px' }}>{error}</div>}
+        <form className="form-grid" onSubmit={handleSubmit} style={{ gridTemplateColumns: '1fr' }}>
+          <label><span>اسم المستخدم</span><input value={username} onChange={e => setUsername(e.target.value)} required autoFocus autoComplete="username" /></label>
+          <label><span>كلمة المرور</span><input type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" /></label>
+          <button type="submit" className="primary-button" disabled={loading} style={{ marginTop: '8px' }}>{loading ? 'جارٍ التحقق...' : 'دخول'}</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Users Management Page (admin only) ──────────────────────────
+const ROLE_LABELS_FE = { admin: 'مدير النظام', manager: 'مدير', sales: 'مبيعات', warehouse: 'مخازن', accountant: 'محاسب' };
+const ROLES_FE = ['admin', 'manager', 'sales', 'warehouse', 'accountant'];
+
+function UsersPage({ token }) {
+  const [users, setUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [form, setForm] = useState({ username: '', password: '', displayName: '', code: '', role: 'sales' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const noticeTimer = useRef(null);
+
+  function showNotice(msg) {
+    setNotice(msg);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(''), 5000);
+  }
+
+  async function load() {
+    const r = await fetch('/api/users', { headers: { Authorization: `Bearer ${token}` } });
+    if (r.ok) { const d = await r.json(); setUsers(d.users); setRoles(d.roles); }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function openAdd() { setEditingUser(null); setForm({ username: '', password: '', displayName: '', code: '', role: 'sales' }); setError(''); setFormOpen(true); }
+  function openEdit(u) { setEditingUser(u); setForm({ username: u.username, displayName: u.displayName, code: u.code || '', role: u.role, password: '' }); setError(''); setFormOpen(true); }
+
+  async function handleSubmit(e) {
+    e.preventDefault(); setSaving(true); setError('');
+    try {
+      const payload = editingUser
+        ? { displayName: form.displayName, code: form.code, role: form.role, ...(form.password ? { password: form.password } : {}) }
+        : { username: form.username, password: form.password, displayName: form.displayName, code: form.code, role: form.role };
+      const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
+      const method = editingUser ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: authHeaders(token), body: JSON.stringify(payload) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.message || 'خطأ'); return; }
+      await load(); setFormOpen(false);
+      showNotice(editingUser ? 'تم تعديل المستخدم بنجاح.' : 'تمت إضافة المستخدم بنجاح.');
+    } catch { setError('تعذر الاتصال بالخادم.'); } finally { setSaving(false); }
+  }
+
+  async function handleDelete(id) {
+    setDeleteTarget(null);
+    const res = await fetch(`/api/users/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok || res.status === 204) { await load(); showNotice('تم حذف المستخدم.'); }
+    else { const d = await res.json().catch(() => ({})); setError(d.message || 'خطأ في الحذف'); }
+  }
+
+  return (
+    <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
+      {notice && <div className="notice success" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>{notice}</span><button type="button" onClick={() => setNotice('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button></div>}
+      {error && <div className="notice error">{error}</div>}
+      <article className="card table-card">
+        <div className="table-actions-header">
+          <div><p className="eyebrow">إدارة النظام</p><h3>المستخدمون والصلاحيات</h3></div>
+          <button type="button" className="primary-button" onClick={openAdd}>إضافة مستخدم</button>
+        </div>
+        <div className="table-list">
+          {users.map(u => (
+            <article key={u.id} className="table-row">
+              <div className="table-main">
+                <div className="record-top">
+                  <strong>{u.displayName}</strong>
+                  <span className="status-chip neutral">{u.username}</span>
+                  {u.code && <span className="status-chip info">{u.code}</span>}
+                  <span className="status-chip calm">{ROLE_LABELS_FE[u.role] ?? u.role}</span>
+                </div>
+              </div>
+              <div className="table-side">
+                <div className="row-actions">
+                  <button type="button" className="ghost-button small" onClick={() => openEdit(u)}>تعديل</button>
+                  <button type="button" className="danger-button small" onClick={() => setDeleteTarget(u.id)}>حذف</button>
+                </div>
+              </div>
+            </article>
+          ))}
+          {users.length === 0 && <p className="empty-notice">لا يوجد مستخدمون.</p>}
+        </div>
+      </article>
+
+      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingUser ? 'تعديل مستخدم' : 'إضافة مستخدم جديد'}>
+        {error && <div className="notice error" style={{ marginBottom: '12px' }}>{error}</div>}
+        <form className="form-grid" onSubmit={handleSubmit}>
+          <label><span>الاسم الظاهر</span><input value={form.displayName} onChange={e => setForm(f => ({ ...f, displayName: e.target.value }))} required /></label>
+          <label><span>كود المستخدم</span><input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="مثال: EMP-001" /></label>
+          <label><span>اسم المستخدم</span><input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} required={!editingUser} disabled={!!editingUser} /></label>
+          <label><span>{editingUser ? 'كلمة مرور جديدة (اتركها فارغة للإبقاء)' : 'كلمة المرور'}</span><input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required={!editingUser} autoComplete="new-password" /></label>
+          <label><span>الدور</span>
+            <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+              {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </label>
+          <div className="form-actions full-width" style={{ marginTop: '16px' }}>
+            <button type="submit" className="primary-button" disabled={saving}>{saving ? 'جارٍ الحفظ...' : editingUser ? 'حفظ التعديل' : 'إضافة'}</button>
+            <button type="button" className="ghost-button" onClick={() => setFormOpen(false)}>إلغاء</button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmModal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => handleDelete(deleteTarget)} title="حذف مستخدم" message="هل أنت متأكد من حذف هذا المستخدم؟ لا يمكن التراجع." />
+    </section>
+  );
+}
+
+// ── Roles Management Page ────────────────────────────────────────────────────
+function RolesPage({ token }) {
+  const [roles, setRoles] = useState([]);
+  const [pages, setPages] = useState([]);
+  const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [localPages, setLocalPages] = useState([]);
+  const [localLabel, setLocalLabel] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [notice, setNotice] = useState('');
+  const noticeTimer = useRef(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newForm, setNewForm] = useState({ label: '', pages: [] });
+  const [newSaving, setNewSaving] = useState(false);
+  const [newError, setNewError] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  function showNotice(msg) {
+    setNotice(msg);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(''), 5000);
+  }
+
+  async function load(keepSelected) {
+    const r = await fetch('/api/roles', { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return;
+    const d = await r.json();
+    setRoles(d.roles);
+    setPages(d.pages);
+    if (keepSelected) {
+      const found = d.roles.find(r => r.id === keepSelected);
+      if (found) {
+        setLocalLabel(found.label);
+        setLocalPages(found.pages === '*' ? [] : [...(found.pages ?? [])]);
+      }
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function handleSelectRole(id) {
+    setSelectedRoleId(id);
+    setSaveError('');
+    const role = roles.find(r => r.id === id);
+    if (!role) { setLocalPages([]); setLocalLabel(''); return; }
+    setLocalLabel(role.label);
+    setLocalPages(role.pages === '*' ? [] : [...(role.pages ?? [])]);
+  }
+
+  const selectedRole = roles.find(r => r.id === selectedRoleId) ?? null;
+  const isAdminRole = selectedRole?.pages === '*';
+
+  function togglePage(pageId) {
+    setLocalPages(prev =>
+      prev.includes(pageId) ? prev.filter(p => p !== pageId) : [...prev, pageId]
+    );
+  }
+
+  function selectAll() { setLocalPages(pages.map(p => p.id)); }
+  function clearAll()  { setLocalPages([]); }
+
+  async function handleSave() {
+    setSaving(true); setSaveError('');
+    try {
+      const res = await fetch(`/api/roles/${selectedRoleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ label: localLabel, pages: localPages }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setSaveError(d.message || 'خطأ'); return; }
+      showNotice('تم حفظ الصلاحيات بنجاح.');
+      load(selectedRoleId);
+    } catch { setSaveError('تعذر الاتصال بالخادم.'); }
+    finally { setSaving(false); }
+  }
+
+  async function handleCreateRole(e) {
+    e.preventDefault(); setNewSaving(true); setNewError('');
+    try {
+      const res = await fetch('/api/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(newForm),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setNewError(d.message || 'خطأ'); return; }
+      setNewOpen(false); setNewForm({ label: '', pages: [] });
+      showNotice('تم إنشاء الدور بنجاح.');
+      await load();
+      setSelectedRoleId(d.id);
+      setLocalLabel(d.label);
+      setLocalPages([...(d.pages ?? [])]);
+    } catch { setNewError('تعذر الاتصال بالخادم.'); }
+    finally { setNewSaving(false); }
+  }
+
+  async function handleDeleteRole() {
+    const id = deleteTarget; setDeleteTarget(null);
+    const res = await fetch(`/api/roles/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok || res.status === 204) {
+      showNotice('تم حذف الدور.');
+      setSelectedRoleId(''); setLocalPages([]); setLocalLabel('');
+      load();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setSaveError(d.message || 'خطأ في الحذف');
+    }
+  }
+
+  function toggleNewPage(pageId) {
+    setNewForm(f => ({
+      ...f,
+      pages: f.pages.includes(pageId) ? f.pages.filter(p => p !== pageId) : [...f.pages, pageId],
+    }));
+  }
+
+  const chipStyle = (checked) => ({
+    display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px',
+    borderRadius: '8px',
+    background: checked ? 'var(--accent-light, #e8f4e8)' : 'var(--row-bg, #f9f9f9)',
+    border: `1px solid ${checked ? 'var(--success, #4caf50)' : 'var(--border, #ddd)'}`,
+    cursor: 'pointer', userSelect: 'none', fontSize: '0.9rem', transition: 'all .15s',
+  });
+
+  const gridStyle = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+    gap: '10px',
+    marginTop: '16px',
+  };
+
+  return (
+    <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
+      {notice && (
+        <div className="notice success" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
+        </div>
+      )}
+
+      <article className="card table-card">
+        <div className="table-actions-header">
+          <div><p className="eyebrow">إدارة النظام</p><h3>الأدوار والصلاحيات</h3></div>
+          <button type="button" className="primary-button" onClick={() => { setNewForm({ label: '', pages: [] }); setNewError(''); setNewOpen(true); }}>+ دور جديد</button>
+        </div>
+
+        {/* Role selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+          <label style={{ fontWeight: 600, fontSize: '0.95rem' }}>اختر الدور:</label>
+          <select
+            value={selectedRoleId}
+            onChange={e => handleSelectRole(e.target.value)}
+            style={{ padding: '8px 14px', borderRadius: '8px', border: '1px solid var(--border, #ccc)', fontSize: '0.95rem', minWidth: '200px' }}
+          >
+            <option value="">-- اختر دوراً --</option>
+            {roles.map(r => (
+              <option key={r.id} value={r.id}>{r.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Permissions panel */}
+        {selectedRole && (
+          <div style={{ marginTop: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {isAdminRole ? (
+                  <strong style={{ fontSize: '1rem' }}>{selectedRole.label}</strong>
+                ) : (
+                  <input
+                    value={localLabel}
+                    onChange={e => setLocalLabel(e.target.value)}
+                    style={{ fontWeight: 700, fontSize: '1rem', border: '1px solid var(--border, #ccc)', borderRadius: '6px', padding: '5px 10px' }}
+                    placeholder="اسم الدور"
+                  />
+                )}
+                {selectedRole.isSystem && <span className="status-chip info" style={{ fontSize: '0.75rem' }}>نظامي</span>}
+                {isAdminRole && <span className="status-chip calm" style={{ fontSize: '0.78rem' }}>وصول كامل</span>}
+              </div>
+
+              {!isAdminRole && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button type="button" className="ghost-button small" onClick={selectAll}>تحديد الكل</button>
+                  <button type="button" className="ghost-button small" onClick={clearAll}>إلغاء الكل</button>
+                  <button type="button" className="primary-button small" disabled={saving} onClick={handleSave}>
+                    {saving ? 'جارٍ الحفظ...' : 'حفظ الصلاحيات'}
+                  </button>
+                  {!selectedRole.isSystem && (
+                    <button type="button" className="danger-button small" onClick={() => setDeleteTarget(selectedRoleId)}>حذف الدور</button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {saveError && <div className="notice error" style={{ marginBottom: '10px' }}>{saveError}</div>}
+
+            {isAdminRole ? (
+              <p style={{ color: 'var(--muted, #888)', fontSize: '0.9rem', marginTop: '8px' }}>مدير النظام يملك صلاحية الوصول لجميع الصفحات تلقائياً ولا يمكن تعديلها.</p>
+            ) : (
+              <div style={gridStyle}>
+                {pages.map(page => {
+                  const checked = localPages.includes(page.id);
+                  return (
+                    <label key={page.id} style={chipStyle(checked)} onClick={() => togglePage(page.id)}>
+                      <input type="checkbox" checked={checked} onChange={() => {}} style={{ accentColor: 'var(--success, #4caf50)', width: '16px', height: '16px' }} />
+                      {page.label}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!selectedRole && roles.length > 0 && (
+          <p style={{ color: 'var(--muted, #888)', marginTop: '24px', fontSize: '0.9rem' }}>اختر دوراً من القائمة أعلاه لعرض وتعديل صلاحياته.</p>
+        )}
+        {roles.length === 0 && <p className="empty-notice">جارٍ التحميل...</p>}
+      </article>
+
+      {/* New Role Modal */}
+      <Modal isOpen={newOpen} onClose={() => setNewOpen(false)} title="إنشاء دور جديد">
+        {newError && <div className="notice error" style={{ marginBottom: '12px' }}>{newError}</div>}
+        <form onSubmit={handleCreateRole}>
+          <label style={{ display: 'block', marginBottom: '16px' }}>
+            <span style={{ display: 'block', marginBottom: '6px', fontWeight: 600 }}>اسم الدور</span>
+            <input value={newForm.label} onChange={e => setNewForm(f => ({ ...f, label: e.target.value }))} required style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border, #ccc)' }} placeholder="مثال: محرر" />
+          </label>
+          <p style={{ fontWeight: 600, marginBottom: '8px' }}>الصفحات المسموح بها (اختياري)</p>
+          <div style={{ ...gridStyle, maxHeight: '280px', overflowY: 'auto' }}>
+            {pages.map(page => {
+              const checked = newForm.pages.includes(page.id);
+              return (
+                <label key={page.id} style={chipStyle(checked)} onClick={() => toggleNewPage(page.id)}>
+                  <input type="checkbox" checked={checked} onChange={() => {}} style={{ accentColor: 'var(--success, #4caf50)', width: '16px', height: '16px' }} />
+                  {page.label}
+                </label>
+              );
+            })}
+          </div>
+          <div className="form-actions full-width" style={{ marginTop: '20px' }}>
+            <button type="submit" className="primary-button" disabled={newSaving}>{newSaving ? 'جارٍ...' : 'إنشاء الدور'}</button>
+            <button type="button" className="ghost-button" onClick={() => setNewOpen(false)}>إلغاء</button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmModal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDeleteRole} title="حذف دور" message="هل أنت متأكد من حذف هذا الدور؟ تأكد أنه غير مرتبط بأي مستخدم." />
+    </section>
+  );
+}
+
+
 function genId() { return String(_nextId++); }
+let _nextId = 1;
 const views = [
   'dashboard',
   'notifications',
+  'users',
+  'roles',
   'product-cards',
   'final-product-store',
   'raw-materials-packaging-store',
@@ -474,7 +901,7 @@ function PlaceholderModuleView({ title, description }) {
   );
 }
 
-function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, renderRow, form, editingId, saving, isFormOpen, onOpenForm, onCloseForm, onSubmit, formTitle, formFields, onBack }) {
+function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, renderRow, form, editingId, saving, isFormOpen, onOpenForm, onCloseForm, onSubmit, formTitle, formFields, onBack, extraActions }) {
   return (
     <>
       <SummaryCards items={data.overview} />
@@ -486,6 +913,7 @@ function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, render
               <h3>{headline}</h3>
             </div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              {extraActions}
               <button type="button" className="primary-button" onClick={onOpenForm}>{addLabel}</button>
               {onBack && (
                 <button type="button" className="ghost-button" onClick={onBack}>
@@ -1493,6 +1921,25 @@ function ChecksView({
 }
 
 export default function App() {
+  const [auth, setAuth] = useState(() => getStoredAuth());
+
+  function handleLogin(data) { setAuth(data); }
+  function handleLogout() { clearAuth(); setAuth(null); }
+
+  if (!auth) return <LoginScreen onLogin={handleLogin} />;
+
+  return <MainApp auth={auth} onLogout={handleLogout} />;
+}
+
+function MainApp({ auth, onLogout }) {
+  const userPages = auth.user.pages; // '*' or array
+  function canAccess(id) { return userPages === '*' || userPages.includes(id); }
+  const isAdmin = auth.user.role === 'admin';
+
+  const filteredNavigation = [
+    ...navigation.filter(item => canAccess(item.id)),
+    ...(isAdmin ? [{ id: 'users', label: 'إدارة المستخدمين', helper: 'الصلاحيات والمستخدمون' }, { id: 'roles', label: 'إدارة الأدوار', helper: 'أدوار وصلاحيات الصفحات' }] : []),
+  ];
   const [activeView, setActiveView] = useState(getInitialView);
   const [viewHistory, setViewHistory] = useState([]);
   const [dashboard, setDashboard] = useState(initialDashboard);
@@ -1533,6 +1980,8 @@ export default function App() {
   const [pcEditingId, setPcEditingId] = useState('');
   const [pcSaving, setPcSaving] = useState(false);
   const [pcFormOpen, setPcFormOpen] = useState(false);
+  const [pcImporting, setPcImporting] = useState(false);
+  const productCardsFileInputRef = useRef(null);
 
   const [finalProductStore, setFinalProductStore] = useState(initialFinalProductStore);
   const [rawMaterialsStore, setRawMaterialsStore] = useState(initialRawMaterialsStore);
@@ -1581,6 +2030,14 @@ export default function App() {
   const [fpFormOpen, setFpFormOpen] = useState(false);
   const [rmFormOpen, setRmFormOpen] = useState(false);
   const [rssFormOpen, setRssFormOpen] = useState(false);
+  const [transferFormOpen, setTransferFormOpen] = useState(false);
+  const [transferForm, setTransferForm] = useState({ repName: '', productName: '', quantity: '', deliveryDate: '', notes: '' });
+  const [transferSaving, setTransferSaving] = useState(false);
+  const [repUsers, setRepUsers] = useState([]);
+  const [saleDeductForm, setSaleDeductForm] = useState({ repName: '', productName: '', quantity: '' });
+  const [saleDeductOpen, setSaleDeductOpen] = useState(false);
+  const [saleDeductSaving, setSaleDeductSaving] = useState(false);
+
   const [fmcFormOpen, setFmcFormOpen] = useState(false);
   const [rmpFormOpen, setRmpFormOpen] = useState(false);
   const [mmpFormOpen, setMmpFormOpen] = useState(false);
@@ -2480,6 +2937,99 @@ export default function App() {
     else if (deleteTarget.type === 'pc') pcCrud.confirmDelete();
   }
 
+  async function handleTransferSubmit(e) {
+    e.preventDefault();
+    try {
+      setTransferSaving(true); setError(''); setNotice('');
+      const res = await fetch('/api/rep-sub-stores/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...transferForm, quantity: Number(transferForm.quantity) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'خطأ في النقل');
+      const [rssR, fpR] = await Promise.all([fetch('/api/rep-sub-stores'), fetch('/api/final-product-store')]);
+      if (rssR.ok) setRepSubStores(await rssR.json());
+      if (fpR.ok) setFinalProductStore(await fpR.json());
+      setTransferFormOpen(false);
+      setTransferForm({ repName: '', productName: '', quantity: '', deliveryDate: '', notes: '' });
+      setNotice(`تم نقل ${data.deducted} وحدة إلى المندوب. المتبقي في المخزن: ${data.remainingInStore}`);
+    } catch (err) { setError(err.message); } finally { setTransferSaving(false); }
+  }
+
+  async function handleSaleDeductSubmit(e) {
+    e.preventDefault();
+    try {
+      setSaleDeductSaving(true); setError(''); setNotice('');
+      const res = await fetch('/api/rep-sub-stores/sale-deduct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...saleDeductForm, quantity: Number(saleDeductForm.quantity) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'خطأ في الخصم');
+      const rssR = await fetch('/api/rep-sub-stores');
+      if (rssR.ok) setRepSubStores(await rssR.json());
+      setSaleDeductOpen(false);
+      setSaleDeductForm({ repName: '', productName: '', quantity: '' });
+      setNotice(`تم خصم الكمية من مخزن المندوب. المتبقي: ${data.quantity}`);
+    } catch (err) { setError(err.message); } finally { setSaleDeductSaving(false); }
+  }
+
+  async function handleProductCardsExcelFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setPcImporting(true);
+      setError('');
+      setNotice('');
+
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const firstSheetName = workbook.SheetNames?.[0];
+      if (!firstSheetName) throw new Error('الملف لا يحتوي على أي Sheet.');
+
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1, defval: '', raw: false });
+      if (!rows.length) throw new Error('الملف فارغ.');
+
+      const normalizeHeader = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const headerRow = Array.isArray(rows[0]) ? rows[0] : [];
+      const aliases = ['item name', 'itemname', 'اسم الصنف', 'الصنف', 'اسم المنتج', 'item'];
+      let nameColumnIndex = headerRow.findIndex((cell) => aliases.includes(normalizeHeader(cell)));
+      if (nameColumnIndex === -1) nameColumnIndex = 0;
+
+      const names = rows
+        .slice(1)
+        .map((row) => String(Array.isArray(row) ? row[nameColumnIndex] : '').trim())
+        .filter(Boolean);
+
+      if (names.length === 0) {
+        throw new Error('لم يتم العثور على أسماء أصناف. تأكد أن العمود Item Name موجود وممتلئ.');
+      }
+
+      const importRes = await fetch('/api/product-cards/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ names })
+      });
+      const importData = await importRes.json().catch(() => ({}));
+
+      if (!importRes.ok) {
+        throw new Error(importData.message || 'فشل استيراد الأصناف من الإكسل.');
+      }
+
+      const refreshed = await fetch('/api/product-cards');
+      if (refreshed.ok) setProductCards(await refreshed.json());
+
+      setNotice(`تم استيراد ${importData.insertedCount ?? 0} صنف. تم تجاهل ${importData.duplicateCount ?? 0} مكرر و${importData.emptyCount ?? 0} صف فارغ.`);
+    } catch (err) {
+      setError(err.message || 'تعذر قراءة ملف الإكسل.');
+    } finally {
+      if (event.target) event.target.value = '';
+      setPcImporting(false);
+    }
+  }
+
   const deleteMessages = {
     sales: 'هل أنت متأكد من حذف عملية البيع هذه؟ لا يمكن التراجع عن هذا الإجراء.',
     credit: 'هل أنت متأكد من حذف سجل مبيعات الآجل هذا؟ لا يمكن التراجع عن هذا الإجراء.',
@@ -2501,10 +3051,10 @@ export default function App() {
     pc: 'هل أنت متأكد من حذف كارت الصنف هذا؟ لا يمكن التراجع عن هذا الإجراء.'
   };
 
-  const title = navigation.find((item) => item.id === activeView)?.label ?? 'لوحة التحكم';
+  const title = filteredNavigation.find((item) => item.id === activeView)?.label ?? 'لوحة التحكم';
   const placeholderModule = placeholderModuleConfig[activeView] ?? null;
-  const loggedInEmail = getLoggedInEmail();
-  const avatarInitial = loggedInEmail.charAt(0).toUpperCase();
+  const displayName = auth.user.displayName;
+  const avatarInitial = displayName.charAt(0).toUpperCase();
   const notificationsCount = checkNotification && !notificationDismissed ? checkNotification.count : 0;
 
   return (
@@ -2517,13 +3067,14 @@ export default function App() {
           <h2>{title}</h2>
         </div>
         <div className="topbar-actions">
-          <div className="user-profile-chip" title={loggedInEmail}>
+          <div className="user-profile-chip" title={auth.user.username}>
             <div className="user-profile-meta">
-              <span>الحساب الحالي</span>
-              <strong>{loggedInEmail}</strong>
+              <span>{ROLE_LABELS_FE[auth.user.role] ?? auth.user.role}</span>
+              <strong>{displayName}</strong>
             </div>
             <div className="user-avatar" aria-hidden="true">{avatarInitial}</div>
           </div>
+          <button type="button" className="ghost-button small" onClick={onLogout} title="تسجيل الخروج" style={{ minHeight: '40px', padding: '0 14px', fontSize: '0.9rem' }}>خروج</button>
 
           <button
             type="button"
@@ -2547,7 +3098,7 @@ export default function App() {
 
       <aside className="sidebar card">
         <nav className="sidebar-nav">
-          {navigation.map((item) => (
+          {filteredNavigation.map((item) => (
             <a
               key={item.id}
               className={`nav-link ${activeView === item.id ? 'active' : ''}`}
@@ -2570,6 +3121,14 @@ export default function App() {
         {notice ? <section className="notice success" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span>{notice}</span><button type="button" onClick={() => setNotice('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: 'inherit', padding: '0 4px', lineHeight: 1 }} aria-label="إغلاق">✕</button></section> : null}
         {loading ? <section className="notice">جارٍ تحميل بيانات النظام...</section> : null}
         {error ? <section className="notice error">{error}</section> : null}
+
+        {activeView === 'users' && isAdmin ? (
+          <UsersPage token={auth.token} />
+        ) : null}
+
+        {activeView === 'roles' && isAdmin ? (
+          <RolesPage token={auth.token} />
+        ) : null}
 
         {!loading && !error && activeView === 'dashboard' ? (
           <DashboardView dashboard={dashboard} onNavigate={navigateTo} activeView={activeView} />
@@ -2781,6 +3340,25 @@ export default function App() {
             onCloseForm={pcCrud.closeForm}
             onSubmit={pcCrud.handleSubmit}
             onBack={viewHistory.length > 0 ? goBack : undefined}
+            extraActions={(
+              <>
+                <input
+                  ref={productCardsFileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleProductCardsExcelFileChange}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => productCardsFileInputRef.current?.click()}
+                  disabled={pcImporting}
+                >
+                  {pcImporting ? 'جارٍ استيراد الإكسل...' : 'رفع ملف Excel'}
+                </button>
+              </>
+            )}
             form={pcForm}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
@@ -2934,32 +3512,39 @@ export default function App() {
         ) : null}
 
         {!loading && !error && activeView === 'rep-sub-stores' ? (
+          <>
           <GenericCrudView
             data={repSubStores}
             eyebrow="مخازن المناديب"
             headline="متابعة العهد والمخزون لدى المناديب"
-            addLabel="إضافة سجل"
+            addLabel="نقل من مخزن المنتج النهائي"
             emptyLabel="لا توجد سجلات بعد."
             formTitle="سجل مندوب"
             editingId={rssEditingId}
             saving={rssSaving}
             isFormOpen={rssFormOpen}
-            onOpenForm={rssCrud.openForm}
+            onOpenForm={() => {
+              fetch('/api/users/by-role/sales', { headers: { Authorization: `Bearer ${auth.token}` } })
+                .then(r => r.ok ? r.json() : []).then(data => setRepUsers(Array.isArray(data) ? data : [])).catch(() => {});
+              setTransferFormOpen(true);
+            }}
             onCloseForm={rssCrud.closeForm}
             onSubmit={rssCrud.handleSubmit}
             onBack={viewHistory.length > 0 ? goBack : undefined}
+            form={rssForm}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
                   <div className="record-top">
                     <strong>{item.repName}</strong>
                     <span className={`status-chip ${item.status === 'مسلّم' ? 'success' : item.status === 'مسترد' ? 'neutral' : 'warning'}`}>{item.status}</span>
+                    <span className="status-chip calm">{item.productName}</span>
                   </div>
-                  <p>{item.productName} · الكمية: {item.quantity}</p>
-                  <small>{formatDate(item.deliveryDate)}</small>
+                  <p>الكمية المتبقية: <strong>{item.quantity}</strong> · {formatDate(item.deliveryDate)}</p>
                 </div>
                 <div className="table-side">
                   <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => { setSaleDeductForm({ repName: item.repName, productName: item.productName, quantity: '' }); setSaleDeductOpen(true); }}>تسجيل بيع</button>
                     <button type="button" className="ghost-button small" onClick={() => rssCrud.startEdit(item)}>تعديل</button>
                     <button type="button" className="danger-button small" onClick={() => rssCrud.requestDelete(item.id)}>حذف</button>
                   </div>
@@ -2975,6 +3560,55 @@ export default function App() {
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={rssForm.notes} onChange={rssCrud.handleInput} /></label>
             </>}
           />
+
+          {/* Transfer Modal */}
+          <Modal isOpen={transferFormOpen} onClose={() => setTransferFormOpen(false)} title="نقل من مخزن المنتج النهائي إلى مندوب">
+            <form className="form-grid" onSubmit={handleTransferSubmit}>
+              <label><span>اسم المندوب</span>
+                {repUsers.length > 0 ? (
+                  <select value={transferForm.repName} onChange={e => setTransferForm(f => ({...f, repName: e.target.value}))} required>
+                    <option value="">— اختر مندوباً —</option>
+                    {repUsers.map(u => <option key={u.id} value={u.displayName}>{u.displayName}{u.code ? ` (${u.code})` : ''}</option>)}
+                  </select>
+                ) : (
+                  <input value={transferForm.repName} onChange={e => setTransferForm(f => ({...f, repName: e.target.value}))} required placeholder="اسم المندوب" />
+                )}
+              </label>
+              <label><span>المنتج</span>
+                {finalProductStore.items.length > 0 ? (
+                  <select value={transferForm.productName} onChange={e => setTransferForm(f => ({...f, productName: e.target.value}))} required>
+                    <option value="">— اختر منتجاً —</option>
+                    {finalProductStore.items.map(p => (
+                      <option key={p.id} value={p.productName}>{p.productName} (متاح: {p.quantity} {p.unit})</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={transferForm.productName} onChange={e => setTransferForm(f => ({...f, productName: e.target.value}))} required placeholder="اسم المنتج" />
+                )}
+              </label>
+              <label><span>الكمية المنقولة</span><input type="number" min="1" value={transferForm.quantity} onChange={e => setTransferForm(f => ({...f, quantity: e.target.value}))} required /></label>
+              <label><span>تاريخ التسليم</span><input type="date" value={transferForm.deliveryDate} onChange={e => setTransferForm(f => ({...f, deliveryDate: e.target.value}))} /></label>
+              <label className="full-width"><span>ملاحظات</span><textarea rows="2" value={transferForm.notes} onChange={e => setTransferForm(f => ({...f, notes: e.target.value}))} /></label>
+              <div className="form-actions full-width" style={{ marginTop: '16px' }}>
+                <button type="submit" className="primary-button" disabled={transferSaving}>{transferSaving ? 'جارٍ النقل...' : 'تأكيد النقل'}</button>
+                <button type="button" className="ghost-button" onClick={() => setTransferFormOpen(false)}>إلغاء</button>
+              </div>
+            </form>
+          </Modal>
+
+          {/* Sale Deduct Modal */}
+          <Modal isOpen={saleDeductOpen} onClose={() => setSaleDeductOpen(false)} title="تسجيل بيع وخصم من مخزن المندوب">
+            <form className="form-grid" onSubmit={handleSaleDeductSubmit}>
+              <label><span>اسم المندوب</span><input value={saleDeductForm.repName} onChange={e => setSaleDeductForm(f => ({...f, repName: e.target.value}))} required /></label>
+              <label><span>المنتج</span><input value={saleDeductForm.productName} onChange={e => setSaleDeductForm(f => ({...f, productName: e.target.value}))} required /></label>
+              <label><span>الكمية المباعة</span><input type="number" min="1" value={saleDeductForm.quantity} onChange={e => setSaleDeductForm(f => ({...f, quantity: e.target.value}))} required /></label>
+              <div className="form-actions full-width" style={{ marginTop: '16px' }}>
+                <button type="submit" className="primary-button" disabled={saleDeductSaving}>{saleDeductSaving ? 'جارٍ الخصم...' : 'تأكيد البيع'}</button>
+                <button type="button" className="ghost-button" onClick={() => setSaleDeductOpen(false)}>إلغاء</button>
+              </div>
+            </form>
+          </Modal>
+          </>
         ) : null}
 
         {!loading && !error && activeView === 'financial-manager-custody' ? (

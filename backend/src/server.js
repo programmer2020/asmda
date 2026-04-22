@@ -1,6 +1,7 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import swaggerUi from 'swagger-ui-express';
 import {
   createCreditSalesRecord,
@@ -73,13 +74,35 @@ import {
   deleteFreeSampleRecord,
   getProductCardsData,
   createProductCardRecord,
+  importProductCardsFromNames,
   updateProductCardRecord,
-  deleteProductCardRecord
+  deleteProductCardRecord,
+  transferToRep,
+  repSaleDeduct
 } from './data/erbStore.js';
 import { getDatabaseStatus, safeQuery } from './db.js';
 import { createSwaggerSpec } from './swagger.js';
+import bcrypt from 'bcryptjs';
+import { getAllUsers, getUserByUsername, getUserById, createUser, updateUser, deleteUser, ROLES, ROLE_LABELS, ROLE_PAGES, getAllRoles, createRole, updateRole, deleteRole, ALL_PAGES, getRolePagesById } from './data/users.js';
 
 dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET ?? 'asmda-secret-dev-key-change-in-prod';
+
+function authMiddleware(req, res, next) {
+  const auth = req.headers['authorization'] ?? '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!token) { res.status(401).json({ message: 'غير مصرح. يرجى تسجيل الدخول.' }); return; }
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch { res.status(401).json({ message: 'انتهت صلاحية الجلسة. يرجى إعادة تسجيل الدخول.' }); }
+}
+
+function adminOnly(req, res, next) {
+  if (req.user?.role !== 'admin') { res.status(403).json({ message: 'هذا الإجراء متاح للمدير فقط.' }); return; }
+  next();
+}
 
 const app = express();
 const port = Number(process.env.PORT ?? 5000);
@@ -738,11 +761,112 @@ app.post('/api/product-cards', async (req, res) => {
   if (!req.body.productName) { res.status(400).json({ message: 'يرجى إدخال اسم الصنف.' }); return; }
   try { res.status(201).json(await createProductCardRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
 });
+app.post('/api/product-cards/import', async (req, res) => {
+  const names = req.body?.names;
+  if (!Array.isArray(names) || names.length === 0) {
+    res.status(400).json({ message: 'يرجى إرسال قائمة أصناف صالحة داخل names.' });
+    return;
+  }
+  try {
+    const result = await importProductCardsFromNames(names);
+    res.status(201).json(result);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
 app.put('/api/product-cards/:id', async (req, res) => {
   if (!req.body.productName) { res.status(400).json({ message: 'يرجى إدخال اسم الصنف.' }); return; }
   try { const u = await updateProductCardRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'الصنف غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
 });
 app.delete('/api/product-cards/:id', async (req, res) => { try { const d = await deleteProductCardRecord(req.params.id); if (!d) { res.status(404).json({ message: 'الصنف غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Rep transfer & sale-deduct ──
+app.post('/api/rep-sub-stores/transfer', async (req, res) => {
+  try {
+    const result = await transferToRep(req.body);
+    res.json(result);
+  } catch (e) { res.status(400).json({ message: e.message }); }
+});
+
+app.post('/api/rep-sub-stores/sale-deduct', async (req, res) => {
+  try {
+    const result = await repSaleDeduct(req.body);
+    res.json(result);
+  } catch (e) { res.status(400).json({ message: e.message }); }
+});
+
+// ── Auth endpoints ──
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body ?? {};
+  if (!username || !password) { res.status(400).json({ message: 'يرجى إدخال اسم المستخدم وكلمة المرور.' }); return; }
+  const user = getUserByUsername(username);
+  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    res.status(401).json({ message: 'اسم المستخدم أو كلمة المرور غير صحيحة.' }); return;
+  }
+  const token = jwt.sign({ id: user.id, username: user.username, displayName: user.displayName, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+  res.json({ token, user: { id: user.id, username: user.username, displayName: user.displayName, role: user.role, roleLabel: ROLE_LABELS[user.role], pages: ROLE_PAGES[user.role] } });
+});
+
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+  const user = getUserById(req.user.id);
+  if (!user) { res.status(404).json({ message: 'المستخدم غير موجود.' }); return; }
+  const { passwordHash: _, ...safe } = user;
+  res.json({ ...safe, roleLabel: ROLE_LABELS[safe.role], pages: ROLE_PAGES[safe.role] });
+});
+
+// ── User management (admin only) ──
+app.get('/api/users', authMiddleware, adminOnly, (_req, res) => {
+  res.json({ users: getAllUsers(), roles: getAllRoles().map(r => ({ value: r.id, label: r.label })) });
+});
+
+// Get users by role (accessible to all authenticated users)
+app.get('/api/users/by-role/:role', authMiddleware, (req, res) => {
+  const users = getAllUsers().filter(u => u.role === req.params.role);
+  res.json(users);
+});
+
+app.post('/api/users', authMiddleware, adminOnly, (req, res) => {
+  const { username, password, displayName, role } = req.body ?? {};
+  if (!username || !password || !displayName || !role) { res.status(400).json({ message: 'يرجى إدخال جميع الحقول المطلوبة.' }); return; }
+  try { res.status(201).json(createUser({ username, password, displayName, role })); }
+  catch (e) { res.status(400).json({ message: e.message }); }
+});
+
+app.put('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
+  try { res.json(updateUser(req.params.id, req.body)); }
+  catch (e) { res.status(400).json({ message: e.message }); }
+});
+
+app.delete('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
+  try { deleteUser(req.params.id); res.status(204).send(); }
+  catch (e) { res.status(400).json({ message: e.message }); }
+});
+
+// ── Roles Management ──────────────────────────────────────────────────────────
+app.get('/api/roles', authMiddleware, adminOnly, (req, res) => {
+  res.json({ roles: getAllRoles(), pages: ALL_PAGES });
+});
+
+app.post('/api/roles', authMiddleware, adminOnly, (req, res) => {
+  try {
+    const { label, pages } = req.body;
+    const role = createRole({ label, pages });
+    res.status(201).json(role);
+  } catch (e) { res.status(400).json({ message: e.message }); }
+});
+
+app.put('/api/roles/:id', authMiddleware, adminOnly, (req, res) => {
+  try {
+    const { label, pages } = req.body;
+    const role = updateRole(req.params.id, { label, pages });
+    res.json(role);
+  } catch (e) { res.status(400).json({ message: e.message }); }
+});
+
+app.delete('/api/roles/:id', authMiddleware, adminOnly, (req, res) => {
+  try { deleteRole(req.params.id); res.status(204).send(); }
+  catch (e) { res.status(400).json({ message: e.message }); }
+});
 
 if (!process.env.VERCEL) {
   app.listen(port, () => {

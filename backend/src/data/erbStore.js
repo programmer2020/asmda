@@ -1012,6 +1012,85 @@ export async function deleteRepSubStoreRecord(id) {
   return result.rowCount > 0;
 }
 
+// Transfer: final product store → rep sub-store (deducts from main store)
+export async function transferToRep(payload) {
+  const { repName, productName, quantity, deliveryDate, notes } = payload;
+  const qty = Number(quantity || 0);
+  if (!repName || !productName || qty <= 0) throw new Error('يرجى إدخال اسم المندوب والمنتج وكمية صحيحة.');
+
+  // Find the product in final_product_store
+  const productResult = await query(
+    'SELECT * FROM final_product_store WHERE LOWER(product_name) = LOWER($1) LIMIT 1',
+    [productName]
+  );
+  if (productResult.rows.length === 0) throw new Error(`المنتج "${productName}" غير موجود في مخزن المنتج النهائي.`);
+
+  const product = productResult.rows[0];
+  const currentQty = Number(product.quantity);
+  if (currentQty < qty) throw new Error(`الكمية المتاحة في المخزن (${currentQty}) أقل من الكمية المطلوبة (${qty}).`);
+
+  const newQty = currentQty - qty;
+  let newStatus = 'متوفر';
+  if (newQty <= 0) newStatus = 'نفد';
+  else if (newQty <= Number(product.min_stock)) newStatus = 'منخفض';
+
+  // Deduct from final product store
+  await query(
+    'UPDATE final_product_store SET quantity=$2, status=$3 WHERE id=$1',
+    [product.id, newQty, newStatus]
+  );
+
+  // Add to rep sub-store (accumulate if same rep+product exists)
+  const existingRep = await query(
+    'SELECT * FROM rep_sub_stores WHERE LOWER(rep_name)=LOWER($1) AND LOWER(product_name)=LOWER($2) LIMIT 1',
+    [repName, productName]
+  );
+
+  let repRecord;
+  if (existingRep.rows.length > 0) {
+    const existing = existingRep.rows[0];
+    const updResult = await query(
+      'UPDATE rep_sub_stores SET quantity=$2, delivery_date=$3, status=$4, notes=$5 WHERE id=$1 RETURNING *',
+      [existing.id, Number(existing.quantity) + qty, deliveryDate || null, 'مسلّم', notes || existing.notes]
+    );
+    repRecord = mapRepSubStore(updResult.rows[0]);
+  } else {
+    const id = await nextId('RSS', 'rep_sub_stores');
+    const insResult = await query(
+      'INSERT INTO rep_sub_stores (id, rep_name, product_name, quantity, delivery_date, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [id, repName, productName, qty, deliveryDate || null, 'مسلّم', notes || '']
+    );
+    repRecord = mapRepSubStore(insResult.rows[0]);
+  }
+
+  return { repRecord, deducted: qty, remainingInStore: newQty };
+}
+
+// Rep sale: deduct from rep sub-store
+export async function repSaleDeduct(payload) {
+  const { repName, productName, quantity } = payload;
+  const qty = Number(quantity || 0);
+  if (!repName || !productName || qty <= 0) throw new Error('يرجى إدخال اسم المندوب والمنتج وكمية صحيحة.');
+
+  const existing = await query(
+    'SELECT * FROM rep_sub_stores WHERE LOWER(rep_name)=LOWER($1) AND LOWER(product_name)=LOWER($2) LIMIT 1',
+    [repName, productName]
+  );
+  if (existing.rows.length === 0) throw new Error(`المندوب "${repName}" ليس لديه مخزون من "${productName}".`);
+
+  const row = existing.rows[0];
+  const currentQty = Number(row.quantity);
+  if (currentQty < qty) throw new Error(`كمية المندوب المتاحة (${currentQty}) أقل من الكمية المطلوبة (${qty}).`);
+
+  const newQty = currentQty - qty;
+  const newStatus = newQty <= 0 ? 'مسترد' : 'مسلّم';
+  const result = await query(
+    'UPDATE rep_sub_stores SET quantity=$2, status=$3 WHERE id=$1 RETURNING *',
+    [row.id, newQty, newStatus]
+  );
+  return mapRepSubStore(result.rows[0]);
+}
+
 // ── Financial Manager Custody ─────────────────────────────────────────────────
 
 function mapFinManagerCustody(row) {
@@ -1390,6 +1469,50 @@ export async function createProductCardRecord(payload) {
   const record = { id, productName: payload.productName || '', category: payload.category || '', unit: payload.unit || 'قطعة', code: payload.code || '', notes: payload.notes || '' };
   _productCards.push(record);
   return mapProductCard(record);
+}
+
+function normalizeProductName(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export async function importProductCardsFromNames(names = []) {
+  if (!Array.isArray(names)) {
+    throw new Error('بيانات الاستيراد غير صحيحة.');
+  }
+
+  const existing = new Set(_productCards.map((item) => normalizeProductName(item.productName)));
+  const seenInFile = new Set();
+
+  let insertedCount = 0;
+  let duplicateCount = 0;
+  let emptyCount = 0;
+
+  for (const rawName of names) {
+    const cleanedName = String(rawName || '').trim();
+    if (!cleanedName) {
+      emptyCount += 1;
+      continue;
+    }
+
+    const key = normalizeProductName(cleanedName);
+    if (existing.has(key) || seenInFile.has(key)) {
+      duplicateCount += 1;
+      continue;
+    }
+
+    const id = 'PC-' + String(_productCards.length + 1).padStart(4, '0') + '-' + Date.now() + '-' + insertedCount;
+    _productCards.push({ id, productName: cleanedName, category: '', unit: 'قطعة', code: '', notes: '' });
+    existing.add(key);
+    seenInFile.add(key);
+    insertedCount += 1;
+  }
+
+  return {
+    insertedCount,
+    duplicateCount,
+    emptyCount,
+    totalRows: names.length
+  };
 }
 
 export async function updateProductCardRecord(id, payload) {
