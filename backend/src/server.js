@@ -70,7 +70,11 @@ import {
   getFreeSamplesData,
   createFreeSampleRecord,
   updateFreeSampleRecord,
-  deleteFreeSampleRecord
+  deleteFreeSampleRecord,
+  getProductCardsData,
+  createProductCardRecord,
+  updateProductCardRecord,
+  deleteProductCardRecord
 } from './data/erbStore.js';
 import { getDatabaseStatus, safeQuery } from './db.js';
 import { createSwaggerSpec } from './swagger.js';
@@ -726,6 +730,18 @@ app.put('/api/free-samples/:id', async (req, res) => {
   try { const u = await updateFreeSampleRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
 });
 app.delete('/api/free-samples/:id', async (req, res) => { try { const d = await deleteFreeSampleRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Product Cards ─────────────────────────────────────────────────────────────
+app.get('/api/product-cards', async (_req, res) => { try { res.json(await getProductCardsData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/product-cards', async (req, res) => {
+  if (!req.body.productName) { res.status(400).json({ message: 'يرجى إدخال اسم الصنف.' }); return; }
+  try { res.status(201).json(await createProductCardRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/product-cards/:id', async (req, res) => {
+  if (!req.body.productName) { res.status(400).json({ message: 'يرجى إدخال اسم الصنف.' }); return; }
+  try { const u = await updateProductCardRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'الصنف غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/product-cards/:id', async (req, res) => { try { const d = await deleteProductCardRecord(req.params.id); if (!d) { res.status(404).json({ message: 'الصنف غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
 
 if (!process.env.VERCEL) {
   app.listen(port, () => {

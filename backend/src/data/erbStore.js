@@ -1362,3 +1362,47 @@ export async function deleteFreeSampleRecord(id) {
   return result.rowCount > 0;
 }
 
+// ── Product Cards ────────────────────────────────────────────────────────────
+
+const _productCards = [];
+
+function mapProductCard(row) {
+  return {
+    id: row.id,
+    productName: row.productName,
+    category: row.category || '',
+    unit: row.unit || 'قطعة',
+    code: row.code || '',
+    notes: row.notes || ''
+  };
+}
+
+export async function getProductCardsData() {
+  const items = _productCards.map(mapProductCard);
+  const overview = [
+    { id: 'pc-total', label: 'إجمالي الأصناف', value: items.length, type: 'number', helper: 'صنف مسجل في النظام', tone: 'calm' }
+  ];
+  return { overview, items };
+}
+
+export async function createProductCardRecord(payload) {
+  const id = 'PC-' + String(_productCards.length + 1).padStart(4, '0') + '-' + Date.now();
+  const record = { id, productName: payload.productName || '', category: payload.category || '', unit: payload.unit || 'قطعة', code: payload.code || '', notes: payload.notes || '' };
+  _productCards.push(record);
+  return mapProductCard(record);
+}
+
+export async function updateProductCardRecord(id, payload) {
+  const idx = _productCards.findIndex(r => r.id === id);
+  if (idx === -1) return null;
+  _productCards[idx] = { ..._productCards[idx], ...payload };
+  return mapProductCard(_productCards[idx]);
+}
+
+export async function deleteProductCardRecord(id) {
+  const idx = _productCards.findIndex(r => r.id === id);
+  if (idx === -1) return false;
+  _productCards.splice(idx, 1);
+  return true;
+}
+

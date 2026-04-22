@@ -4,6 +4,8 @@ let _nextId = 1;
 function genId() { return String(_nextId++); }
 const views = [
   'dashboard',
+  'notifications',
+  'product-cards',
   'final-product-store',
   'raw-materials-packaging-store',
   'rep-sub-stores',
@@ -28,6 +30,11 @@ const navigation = [
     id: 'dashboard',
     label: 'لوحة التحكم',
     helper: 'الملخص العام'
+  },
+  {
+    id: 'product-cards',
+    label: 'كبون الأصناف',
+    helper: 'إدارة قائمة المنتجات المعتمدة'
   },
   {
     id: 'final-product-store',
@@ -186,6 +193,9 @@ const initialCheckForm = {
   status: 'معلق',
   notes: ''
 };
+
+const initialProductCards = { overview: [], items: [] };
+const initialProductCardForm = { productName: '', category: '', unit: 'قطعة', code: '', notes: '' };
 
 const initialFinalProductStore = { overview: [], items: [] };
 const initialRawMaterialsStore = { overview: [], items: [] };
@@ -673,28 +683,6 @@ function DashboardView({ dashboard, onNavigate, activeView }) {
           </div>
         </article>
 
-        <article className="hero-side card">
-          <div className="section-head">
-            <div>
-              <p className="eyebrow">تحديث سريع</p>
-              <h3>وضع التشغيل الحالي</h3>
-            </div>
-            <span className={`status-chip ${meta?.runtime === 'postgres' ? 'success' : 'warning'}`}>
-              {meta?.runtime === 'postgres' ? 'Postgres' : 'محلي'}
-            </span>
-          </div>
-
-          <div className="runtime-grid">
-            <div className="runtime-box">
-              <span>مصدر البيانات</span>
-              <strong>{meta?.database === 'connected' ? 'متصل بقاعدة البيانات' : 'بيانات محلية'}</strong>
-            </div>
-            <div className="runtime-box">
-              <span>آخر تحديث</span>
-              <strong>{formatDate(meta?.updatedAt)}</strong>
-            </div>
-          </div>
-        </article>
       </section>
 
       <SummaryCards items={summary} />
@@ -1540,6 +1528,12 @@ export default function App() {
   const [checkEditingId, setCheckEditingId] = useState('');
 
   // ── New module states ──
+  const [productCards, setProductCards] = useState(initialProductCards);
+  const [pcForm, setPcForm] = useState(initialProductCardForm);
+  const [pcEditingId, setPcEditingId] = useState('');
+  const [pcSaving, setPcSaving] = useState(false);
+  const [pcFormOpen, setPcFormOpen] = useState(false);
+
   const [finalProductStore, setFinalProductStore] = useState(initialFinalProductStore);
   const [rawMaterialsStore, setRawMaterialsStore] = useState(initialRawMaterialsStore);
   const [repSubStores, setRepSubStores] = useState(initialRepSubStores);
@@ -1622,8 +1616,33 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  function loadWorkspace() {
-    // Static mode – no backend calls
+  async function loadAllData() {
+    try {
+      setLoading(true); setError('');
+      const pairs = [
+        ['/api/dashboard', setDashboard],
+        ['/api/sales', setSales],
+        ['/api/credit-sales', setCreditSales],
+        ['/api/returns', setReturns],
+        ['/api/price-list', setPriceList],
+        ['/api/custodies', setCustodies],
+        ['/api/checks', setChecks],
+        ['/api/final-product-store', setFinalProductStore],
+        ['/api/raw-materials-store', setRawMaterialsStore],
+        ['/api/rep-sub-stores', setRepSubStores],
+        ['/api/financial-manager-custody', setFinManagerCustody],
+        ['/api/raw-materials-purchases', setRawPurchases],
+        ['/api/machine-maintenance-purchases', setMachinePurchases],
+        ['/api/misc-purchases', setMiscPurchases],
+        ['/api/payroll-advances', setPayrollAdvances],
+        ['/api/customer-payment-alerts', setPaymentAlerts],
+        ['/api/free-samples', setFreeSamples],
+        ['/api/product-cards', setProductCards],
+      ];
+      await Promise.all(pairs.map(async ([url, setter]) => {
+        try { const r = await fetch(url); if (r.ok) setter(await r.json()); } catch { /* ignore individual failures */ }
+      }));
+    } catch { setError('تعذر تحميل البيانات من الخادم.'); } finally { setLoading(false); }
   }
 
   // Initialize demo data
@@ -1723,7 +1742,7 @@ export default function App() {
     setSales(demoSales);
     setCreditSales(demoCreditSales);
     setReturns(demoReturns);
-    setLoading(false);
+    loadAllData();
   }, []);
 
   function navigateTo(view) {
@@ -1957,23 +1976,16 @@ export default function App() {
   async function handleCheckSubmit(event) {
     event.preventDefault();
     try {
-      setCheckSaving(true);
-      setError('');
-      setNotice('');
+      setCheckSaving(true); setError(''); setNotice('');
       const payload = { ...checkForm, amount: Number(checkForm.amount) };
-      if (checkEditingId) {
-        setChecks(prev => ({ ...prev, items: prev.items.map(i => i.id === checkEditingId ? { ...i, ...payload } : i) }));
-      } else {
-        setChecks(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload }] }));
-      }
-      const msg = checkEditingId ? 'تم تعديل الشيك بنجاح.' : 'تمت إضافة الشيك بنجاح.';
+      const url = checkEditingId ? `/api/checks/${checkEditingId}` : '/api/checks';
+      const method = checkEditingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      const refreshed = await fetch('/api/checks'); if (refreshed.ok) setChecks(await refreshed.json());
       closeCheckForm();
-      setNotice(msg);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setCheckSaving(false);
-    }
+      setNotice(checkEditingId ? 'تم تعديل الشيك بنجاح.' : 'تمت إضافة الشيك بنجاح.');
+    } catch (requestError) { setError(requestError.message); } finally { setCheckSaving(false); }
   }
 
   function requestCheckDelete(id) {
@@ -1981,16 +1993,13 @@ export default function App() {
   }
 
   async function confirmCheckDelete() {
-    const id = deleteTarget.id;
-    setDeleteTarget(null);
+    const id = deleteTarget.id; setDeleteTarget(null);
     try {
-      setError('');
-      setNotice('');
-      setChecks(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
+      setError(''); setNotice('');
+      await fetch(`/api/checks/${id}`, { method: 'DELETE' });
+      const refreshed = await fetch('/api/checks'); if (refreshed.ok) setChecks(await refreshed.json());
       setNotice('تم حذف الشيك بنجاح.');
-    } catch (requestError) {
-      setError(requestError.message);
-    }
+    } catch (requestError) { setError(requestError.message); }
   }
 
   // ── Sales ──────────────────────────────────────────────
@@ -2028,23 +2037,16 @@ export default function App() {
   async function handleSalesSubmit(event) {
     event.preventDefault();
     try {
-      setSalesSaving(true);
-      setError('');
-      setNotice('');
+      setSalesSaving(true); setError(''); setNotice('');
       const payload = { ...salesForm, amount: Number(salesForm.amount) };
-      if (salesEditingId) {
-        setSales(prev => ({ ...prev, items: prev.items.map(i => i.id === salesEditingId ? { ...i, ...payload } : i) }));
-      } else {
-        setSales(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload }] }));
-      }
-      const msg = salesEditingId ? 'تم تعديل عملية البيع بنجاح.' : 'تمت إضافة عملية البيع بنجاح.';
+      const url = salesEditingId ? `/api/sales/${salesEditingId}` : '/api/sales';
+      const method = salesEditingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      const refreshed = await fetch('/api/sales'); if (refreshed.ok) setSales(await refreshed.json());
       closeSalesForm();
-      setNotice(msg);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setSalesSaving(false);
-    }
+      setNotice(salesEditingId ? 'تم تعديل عملية البيع بنجاح.' : 'تمت إضافة عملية البيع بنجاح.');
+    } catch (requestError) { setError(requestError.message); } finally { setSalesSaving(false); }
   }
 
   function requestSalesDelete(id) {
@@ -2052,16 +2054,13 @@ export default function App() {
   }
 
   async function confirmSalesDelete() {
-    const id = deleteTarget.id;
-    setDeleteTarget(null);
+    const id = deleteTarget.id; setDeleteTarget(null);
     try {
-      setError('');
-      setNotice('');
-      setSales(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
+      setError(''); setNotice('');
+      await fetch(`/api/sales/${id}`, { method: 'DELETE' });
+      const refreshed = await fetch('/api/sales'); if (refreshed.ok) setSales(await refreshed.json());
       setNotice('تم حذف عملية البيع بنجاح.');
-    } catch (requestError) {
-      setError(requestError.message);
-    }
+    } catch (requestError) { setError(requestError.message); }
   }
 
   // ── Credit Sales ───────────────────────────────────────
@@ -2100,28 +2099,16 @@ export default function App() {
   async function handleCreditSubmit(event) {
     event.preventDefault();
     try {
-      setCreditSaving(true);
-      setError('');
-      setNotice('');
-      const payload = {
-        ...creditForm,
-        amount: Number(creditForm.amount),
-        paidAmount: Number(creditForm.paidAmount)
-      };
-      const remainingAmount = payload.amount - payload.paidAmount;
-      if (creditEditingId) {
-        setCreditSales(prev => ({ ...prev, items: prev.items.map(i => i.id === creditEditingId ? { ...i, ...payload, remainingAmount } : i) }));
-      } else {
-        setCreditSales(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload, remainingAmount }] }));
-      }
-      const msg = creditEditingId ? 'تم تعديل سجل مبيعات الآجل بنجاح.' : 'تمت إضافة سجل مبيعات الآجل بنجاح.';
+      setCreditSaving(true); setError(''); setNotice('');
+      const payload = { ...creditForm, amount: Number(creditForm.amount), paidAmount: Number(creditForm.paidAmount) };
+      const url = creditEditingId ? `/api/credit-sales/${creditEditingId}` : '/api/credit-sales';
+      const method = creditEditingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      const refreshed = await fetch('/api/credit-sales'); if (refreshed.ok) setCreditSales(await refreshed.json());
       closeCreditForm();
-      setNotice(msg);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setCreditSaving(false);
-    }
+      setNotice(creditEditingId ? 'تم تعديل سجل مبيعات الآجل بنجاح.' : 'تمت إضافة سجل مبيعات الآجل بنجاح.');
+    } catch (requestError) { setError(requestError.message); } finally { setCreditSaving(false); }
   }
 
   function requestCreditDelete(id) {
@@ -2129,16 +2116,13 @@ export default function App() {
   }
 
   async function confirmCreditDelete() {
-    const id = deleteTarget.id;
-    setDeleteTarget(null);
+    const id = deleteTarget.id; setDeleteTarget(null);
     try {
-      setError('');
-      setNotice('');
-      setCreditSales(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
+      setError(''); setNotice('');
+      await fetch(`/api/credit-sales/${id}`, { method: 'DELETE' });
+      const refreshed = await fetch('/api/credit-sales'); if (refreshed.ok) setCreditSales(await refreshed.json());
       setNotice('تم حذف سجل مبيعات الآجل بنجاح.');
-    } catch (requestError) {
-      setError(requestError.message);
-    }
+    } catch (requestError) { setError(requestError.message); }
   }
 
   // ── Returns ────────────────────────────────────────────
@@ -2177,23 +2161,16 @@ export default function App() {
   async function handleReturnsSubmit(event) {
     event.preventDefault();
     try {
-      setReturnsSaving(true);
-      setError('');
-      setNotice('');
+      setReturnsSaving(true); setError(''); setNotice('');
       const payload = { ...returnsForm, amount: Number(returnsForm.amount) };
-      if (returnsEditingId) {
-        setReturns(prev => ({ ...prev, items: prev.items.map(i => i.id === returnsEditingId ? { ...i, ...payload } : i) }));
-      } else {
-        setReturns(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload }] }));
-      }
-      const msg = returnsEditingId ? 'تم تعديل المرتجع بنجاح.' : 'تمت إضافة المرتجع بنجاح.';
+      const url = returnsEditingId ? `/api/returns/${returnsEditingId}` : '/api/returns';
+      const method = returnsEditingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      const refreshed = await fetch('/api/returns'); if (refreshed.ok) setReturns(await refreshed.json());
       closeReturnsForm();
-      setNotice(msg);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setReturnsSaving(false);
-    }
+      setNotice(returnsEditingId ? 'تم تعديل المرتجع بنجاح.' : 'تمت إضافة المرتجع بنجاح.');
+    } catch (requestError) { setError(requestError.message); } finally { setReturnsSaving(false); }
   }
 
   function requestReturnsDelete(id) {
@@ -2201,16 +2178,13 @@ export default function App() {
   }
 
   async function confirmReturnsDelete() {
-    const id = deleteTarget.id;
-    setDeleteTarget(null);
+    const id = deleteTarget.id; setDeleteTarget(null);
     try {
-      setError('');
-      setNotice('');
-      setReturns(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
+      setError(''); setNotice('');
+      await fetch(`/api/returns/${id}`, { method: 'DELETE' });
+      const refreshed = await fetch('/api/returns'); if (refreshed.ok) setReturns(await refreshed.json());
       setNotice('تم حذف المرتجع بنجاح.');
-    } catch (requestError) {
-      setError(requestError.message);
-    }
+    } catch (requestError) { setError(requestError.message); }
   }
 
   // ── Price List ─────────────────────────────────────────
@@ -2246,27 +2220,16 @@ export default function App() {
   async function handlePriceListSubmit(event) {
     event.preventDefault();
     try {
-      setPriceListSaving(true);
-      setError('');
-      setNotice('');
-      const payload = {
-        ...priceListForm,
-        purchasePrice: Number(priceListForm.purchasePrice),
-        sellingPrice: Number(priceListForm.sellingPrice)
-      };
-      if (priceListEditingId) {
-        setPriceList(prev => ({ ...prev, items: prev.items.map(i => i.id === priceListEditingId ? { ...i, ...payload } : i) }));
-      } else {
-        setPriceList(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload }] }));
-      }
-      const msg = priceListEditingId ? 'تم تعديل المنتج بنجاح.' : 'تمت إضافة المنتج بنجاح.';
+      setPriceListSaving(true); setError(''); setNotice('');
+      const payload = { ...priceListForm, purchasePrice: Number(priceListForm.purchasePrice), sellingPrice: Number(priceListForm.sellingPrice) };
+      const url = priceListEditingId ? `/api/price-list/${priceListEditingId}` : '/api/price-list';
+      const method = priceListEditingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      const refreshed = await fetch('/api/price-list'); if (refreshed.ok) setPriceList(await refreshed.json());
       closePriceListForm();
-      setNotice(msg);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setPriceListSaving(false);
-    }
+      setNotice(priceListEditingId ? 'تم تعديل المنتج بنجاح.' : 'تمت إضافة المنتج بنجاح.');
+    } catch (requestError) { setError(requestError.message); } finally { setPriceListSaving(false); }
   }
 
   function requestPriceListDelete(id) {
@@ -2274,16 +2237,13 @@ export default function App() {
   }
 
   async function confirmPriceListDelete() {
-    const id = deleteTarget.id;
-    setDeleteTarget(null);
+    const id = deleteTarget.id; setDeleteTarget(null);
     try {
-      setError('');
-      setNotice('');
-      setPriceList(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
+      setError(''); setNotice('');
+      await fetch(`/api/price-list/${id}`, { method: 'DELETE' });
+      const refreshed = await fetch('/api/price-list'); if (refreshed.ok) setPriceList(await refreshed.json());
       setNotice('تم حذف المنتج بنجاح.');
-    } catch (requestError) {
-      setError(requestError.message);
-    }
+    } catch (requestError) { setError(requestError.message); }
   }
 
 
@@ -2322,26 +2282,16 @@ export default function App() {
   async function handleCustodySubmit(event) {
     event.preventDefault();
     try {
-      setCustodiesSaving(true);
-      setError('');
-      setNotice('');
-      const payload = {
-        ...custodyForm,
-        initialAmount: Number(custodyForm.initialAmount)
-      };
-      if (custodyEditingId) {
-        setCustodies(prev => ({ ...prev, items: prev.items.map(i => i.id === custodyEditingId ? { ...i, ...payload, currentBalance: payload.initialAmount } : i) }));
-      } else {
-        setCustodies(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload, currentBalance: payload.initialAmount, transactions: [] }] }));
-      }
-      const msg = custodyEditingId ? 'تم تعديل العهدة بنجاح.' : 'تمت إضافة العهدة بنجاح.';
+      setCustodiesSaving(true); setError(''); setNotice('');
+      const payload = { ...custodyForm, initialAmount: Number(custodyForm.initialAmount) };
+      const url = custodyEditingId ? `/api/custodies/${custodyEditingId}` : '/api/custodies';
+      const method = custodyEditingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      const refreshed = await fetch('/api/custodies'); if (refreshed.ok) setCustodies(await refreshed.json());
       closeCustodyForm();
-      setNotice(msg);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setCustodiesSaving(false);
-    }
+      setNotice(custodyEditingId ? 'تم تعديل العهدة بنجاح.' : 'تمت إضافة العهدة بنجاح.');
+    } catch (requestError) { setError(requestError.message); } finally { setCustodiesSaving(false); }
   }
 
   function requestCustodyDelete(id) {
@@ -2349,23 +2299,22 @@ export default function App() {
   }
 
   async function confirmCustodyDelete() {
-    const id = deleteTarget.id;
-    setDeleteTarget(null);
+    const id = deleteTarget.id; setDeleteTarget(null);
     try {
-      setError('');
-      setNotice('');
-      setCustodies(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
+      setError(''); setNotice('');
+      await fetch(`/api/custodies/${id}`, { method: 'DELETE' });
+      const refreshed = await fetch('/api/custodies'); if (refreshed.ok) setCustodies(await refreshed.json());
       setNotice('تم حذف العهدة بنجاح.');
-    } catch (requestError) {
-      setError(requestError.message);
-    }
+    } catch (requestError) { setError(requestError.message); }
   }
 
   async function openCustodyTransactions(id) {
     setActiveCustodyId(id);
     setError('');
-    const custody = custodies.items.find(c => c.id === id);
-    setActiveCustodyTransactions(custody?.transactions ?? []);
+    try {
+      const res = await fetch(`/api/custodies/${id}/transactions`);
+      setActiveCustodyTransactions(res.ok ? await res.json() : []);
+    } catch { setActiveCustodyTransactions([]); }
     setTransactionsModalOpen(true);
     setTransactionForm(initialTransactionForm);
   }
@@ -2384,27 +2333,16 @@ export default function App() {
   async function handleTransactionSubmit(event) {
     event.preventDefault();
     try {
-      setTransactionSaving(true);
-      setError('');
-      setNotice('');
-      const payload = {
-        ...transactionForm,
-        amount: Number(transactionForm.amount)
-      };
-      const newTx = { id: genId(), ...payload };
-      const updatedTxs = [...activeCustodyTransactions, newTx];
-      setActiveCustodyTransactions(updatedTxs);
-      setCustodies(prev => ({
-        ...prev,
-        items: prev.items.map(c => c.id === activeCustodyId ? { ...c, transactions: updatedTxs } : c)
-      }));
+      setTransactionSaving(true); setError(''); setNotice('');
+      const payload = { ...transactionForm, amount: Number(transactionForm.amount) };
+      const res = await fetch(`/api/custodies/${activeCustodyId}/transactions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      const txRes = await fetch(`/api/custodies/${activeCustodyId}/transactions`);
+      if (txRes.ok) setActiveCustodyTransactions(await txRes.json());
+      const custRes = await fetch('/api/custodies'); if (custRes.ok) setCustodies(await custRes.json());
       setNotice('تم تسجيل الحركة بنجاح.');
       setTransactionForm(initialTransactionForm);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setTransactionSaving(false);
-    }
+    } catch (requestError) { setError(requestError.message); } finally { setTransactionSaving(false); }
   }
 
   function requestTransactionDelete(id) {
@@ -2422,11 +2360,12 @@ export default function App() {
       try {
         setSaving(true); setError(''); setNotice('');
         const payload = mapToPayload(form);
-        if (editingId) {
-          setData(prev => ({ ...prev, items: prev.items.map(i => i.id === editingId ? { ...i, ...payload } : i) }));
-        } else {
-          setData(prev => ({ ...prev, items: [...prev.items, { id: genId(), ...payload }] }));
-        }
+        const url = editingId ? `/api${apiPath}/${editingId}` : `/api${apiPath}`;
+        const method = editingId ? 'PUT' : 'POST';
+        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+        const refreshed = await fetch(`/api${apiPath}`);
+        if (refreshed.ok) setData(await refreshed.json());
         closeForm();
         setNotice(editingId ? `تم تعديل ${entityLabel} بنجاح.` : `تمت إضافة ${entityLabel} بنجاح.`);
       } catch (err) { setError(err.message); } finally { setSaving(false); }
@@ -2434,7 +2373,14 @@ export default function App() {
     function requestDelete(id) { setDeleteTarget({ type: deleteType, id }); }
     async function confirmDelete() {
       const id = deleteTarget.id; setDeleteTarget(null);
-      try { setError(''); setNotice(''); setData(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) })); setNotice(`تم حذف ${entityLabel} بنجاح.`); } catch (err) { setError(err.message); }
+      try {
+        setError(''); setNotice('');
+        const res = await fetch(`/api${apiPath}/${id}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 404) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الحذف'); }
+        const refreshed = await fetch(`/api${apiPath}`);
+        if (refreshed.ok) setData(await refreshed.json());
+        setNotice(`تم حذف ${entityLabel} بنجاح.`);
+      } catch (err) { setError(err.message); }
     }
     return { handleInput, openForm, startEdit, closeForm, handleSubmit, requestDelete, confirmDelete };
   }
@@ -2489,22 +2435,21 @@ export default function App() {
     i => ({ customerName: i.customerName, productName: i.productName, quantity: String(i.quantity), unit: i.unit, reason: i.reason||'', sampleDate: i.sampleDate||'', notes: i.notes||'' }),
     'fs', 'العينة');
 
+  const pcCrud = makeModuleCrud('/product-cards', setProductCards, pcForm, setPcForm, initialProductCardForm, pcEditingId, setPcEditingId, pcSaving, setPcSaving, pcFormOpen, setPcFormOpen,
+    f => ({ ...f }),
+    i => ({ productName: i.productName, category: i.category||'', unit: i.unit||'قطعة', code: i.code||'', notes: i.notes||'' }),
+    'pc', 'الصنف');
+
   async function confirmTransactionDelete() {
-    const id = deleteTarget.id;
-    setDeleteTarget(null);
+    const id = deleteTarget.id; setDeleteTarget(null);
     try {
-      setError('');
-      setNotice('');
-      const updatedTxs = activeCustodyTransactions.filter(tx => tx.id !== id);
-      setActiveCustodyTransactions(updatedTxs);
-      setCustodies(prev => ({
-        ...prev,
-        items: prev.items.map(c => c.id === activeCustodyId ? { ...c, transactions: updatedTxs } : c)
-      }));
+      setError(''); setNotice('');
+      await fetch(`/api/custodies/${activeCustodyId}/transactions/${id}`, { method: 'DELETE' });
+      const txRes = await fetch(`/api/custodies/${activeCustodyId}/transactions`);
+      if (txRes.ok) setActiveCustodyTransactions(await txRes.json());
+      const custRes = await fetch('/api/custodies'); if (custRes.ok) setCustodies(await custRes.json());
       setNotice('تم التراجع عن الحركة بنجاح.');
-    } catch (requestError) {
-      setError(requestError.message);
-    }
+    } catch (requestError) { setError(requestError.message); }
   }
 
   function handleConfirmDelete() {
@@ -2526,6 +2471,7 @@ export default function App() {
     else if (deleteTarget.type === 'pay') payCrud.confirmDelete();
     else if (deleteTarget.type === 'cpa') cpaCrud.confirmDelete();
     else if (deleteTarget.type === 'fs') fsCrud.confirmDelete();
+    else if (deleteTarget.type === 'pc') pcCrud.confirmDelete();
   }
 
   const deleteMessages = {
@@ -2545,7 +2491,8 @@ export default function App() {
     msc: 'هل أنت متأكد من حذف هذا المصروف؟ لا يمكن التراجع عن هذا الإجراء.',
     pay: 'هل أنت متأكد من حذف هذا السجل؟ لا يمكن التراجع عن هذا الإجراء.',
     cpa: 'هل أنت متأكد من حذف هذا التنبيه؟ لا يمكن التراجع عن هذا الإجراء.',
-    fs: 'هل أنت متأكد من حذف هذه العينة؟ لا يمكن التراجع عن هذا الإجراء.'
+    fs: 'هل أنت متأكد من حذف هذه العينة؟ لا يمكن التراجع عن هذا الإجراء.',
+    pc: 'هل أنت متأكد من حذف كارت الصنف هذا؟ لا يمكن التراجع عن هذا الإجراء.'
   };
 
   const title = navigation.find((item) => item.id === activeView)?.label ?? 'لوحة التحكم';
@@ -2576,7 +2523,7 @@ export default function App() {
             type="button"
             className={`notification-icon-button ${notificationsCount > 0 ? 'has-alert' : ''}`}
             onClick={() => {
-              navigateTo('checks');
+              navigateTo('notifications');
               setNotificationDismissed(true);
             }}
             aria-label="تنبيهات التحصيل"
@@ -2728,6 +2675,141 @@ export default function App() {
           />
         ) : null}
 
+        {!loading && !error && activeView === 'notifications' ? (() => {
+          const today = getTodayLocalDateKey();
+          const todayChecks = checks.items.filter(i => i.collectionDate === today && i.status === 'معلق');
+          const soonChecks = checks.items.filter(i => {
+            if (i.status !== 'معلق' || i.collectionDate === today) return false;
+            const diff = (new Date(i.collectionDate) - new Date()) / 86400000;
+            return diff > 0 && diff <= 7;
+          });
+          const overdueChecks = checks.items.filter(i => i.status === 'معلق' && i.collectionDate < today);
+          const allAlerts = checks.items.filter(i => i.status === 'معلق');
+          return (
+            <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
+              <article className="card table-card">
+                <div className="table-actions-header">
+                  <div>
+                    <p className="eyebrow">التنبيهات</p>
+                    <h3>مركز التنبيهات والاستحقاقات</h3>
+                  </div>
+                </div>
+
+                {allAlerts.length === 0 ? (
+                  <p className="empty-notice">لا توجد تنبيهات حالياً.</p>
+                ) : (
+                  <div className="table-list">
+                    {overdueChecks.length > 0 && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <p className="eyebrow" style={{ color: 'var(--danger)', marginBottom: '8px', paddingRight: '8px' }}>✕ شيكات متأخرة — {overdueChecks.length}</p>
+                        {overdueChecks.map(item => (
+                          <article key={item.id} className="table-row">
+                            <div className="table-main">
+                              <div className="record-top">
+                                <strong>{item.customerName}</strong>
+                                <span className="status-chip danger">متأخر</span>
+                                {item.bankName && <span className="status-chip neutral">{item.bankName}</span>}
+                              </div>
+                              <p>{formatDate(item.collectionDate)}{item.checkNumber ? ` — شيك رقم: ${item.checkNumber}` : ''}</p>
+                            </div>
+                            <div className="table-side"><strong>{formatMoney(item.amount)}</strong></div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                    {todayChecks.length > 0 && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <p className="eyebrow" style={{ color: 'var(--warning)', marginBottom: '8px', paddingRight: '8px' }}>🔔 تحصيل اليوم — {todayChecks.length}</p>
+                        {todayChecks.map(item => (
+                          <article key={item.id} className="table-row">
+                            <div className="table-main">
+                              <div className="record-top">
+                                <strong>{item.customerName}</strong>
+                                <span className="status-chip warning">اليوم</span>
+                                {item.bankName && <span className="status-chip neutral">{item.bankName}</span>}
+                              </div>
+                              <p>{formatDate(item.collectionDate)}{item.checkNumber ? ` — شيك رقم: ${item.checkNumber}` : ''}</p>
+                            </div>
+                            <div className="table-side"><strong>{formatMoney(item.amount)}</strong></div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                    {soonChecks.length > 0 && (
+                      <div>
+                        <p className="eyebrow" style={{ color: 'var(--accent)', marginBottom: '8px', paddingRight: '8px' }}>⏰ خلال 7 أيام — {soonChecks.length}</p>
+                        {soonChecks.map(item => (
+                          <article key={item.id} className="table-row">
+                            <div className="table-main">
+                              <div className="record-top">
+                                <strong>{item.customerName}</strong>
+                                <span className="status-chip info">قريباً</span>
+                                {item.bankName && <span className="status-chip neutral">{item.bankName}</span>}
+                              </div>
+                              <p>{formatDate(item.collectionDate)}{item.checkNumber ? ` — شيك رقم: ${item.checkNumber}` : ''}</p>
+                            </div>
+                            <div className="table-side"><strong>{formatMoney(item.amount)}</strong></div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </article>
+            </section>
+          );
+        })() : null}
+
+        {!loading && !error && activeView === 'product-cards' ? (
+          <GenericCrudView
+            data={productCards}
+            eyebrow="كبون الأصناف"
+            headline="قائمة المنتجات المعتمدة في النظام"
+            addLabel="إضافة صنف جديد"
+            emptyLabel="لا توجد أصناف مسجلة بعد. أضف صنفاً لتتمكن من استخدامه في المخازن."
+            formTitle="صنف"
+            editingId={pcEditingId}
+            saving={pcSaving}
+            isFormOpen={pcFormOpen}
+            onOpenForm={pcCrud.openForm}
+            onCloseForm={pcCrud.closeForm}
+            onSubmit={pcCrud.handleSubmit}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
+            form={pcForm}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.productName}</strong>
+                    {item.code && <span className="status-chip neutral">{item.code}</span>}
+                    {item.category && <span className="status-chip neutral">{item.category}</span>}
+                    <span className="status-chip calm">{item.unit}</span>
+                  </div>
+                  {item.notes && <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>{item.notes}</p>}
+                </div>
+                <div className="table-side">
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => pcCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => pcCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم الصنف</span><input name="productName" value={pcForm.productName} onChange={pcCrud.handleInput} required /></label>
+              <label><span>الكود / الرمز</span><input name="code" value={pcForm.code} onChange={pcCrud.handleInput} /></label>
+              <label><span>التصنيف</span><input name="category" value={pcForm.category} onChange={pcCrud.handleInput} /></label>
+              <label><span>وحدة القياس</span>
+                <select name="unit" value={pcForm.unit} onChange={pcCrud.handleInput}>
+                  {['قطعة','كرتونة','دستة','كيلو','جرام','لتر','متر','علبة','طقم','باكيت','زجاجة','كيس'].map(u => <option key={u} value={u}>{u}</option>)}
+                  {!['قطعة','كرتونة','دستة','كيلو','جرام','لتر','متر','علبة','طقم','باكيت','زجاجة','كيس'].includes(pcForm.unit) && pcForm.unit && <option value={pcForm.unit}>{pcForm.unit}</option>}
+                </select>
+              </label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={pcForm.notes} onChange={pcCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
         {!loading && !error && activeView === 'final-product-store' ? (
           <GenericCrudView
             data={finalProductStore}
@@ -2763,7 +2845,24 @@ export default function App() {
               </article>
             )}
             formFields={<>
-              <label><span>اسم المنتج</span><input name="productName" value={fpForm.productName} onChange={fpCrud.handleInput} required /></label>
+              <label className="full-width"><span>الصنف</span>
+                {productCards.items.length > 0 ? (
+                  <select name="productName" value={fpForm.productName} onChange={(e) => {
+                    const selected = productCards.items.find(p => p.productName === e.target.value);
+                    setFpForm(prev => ({ ...prev, productName: e.target.value, category: selected?.category || prev.category, unit: selected?.unit || prev.unit }));
+                  }} required>
+                    <option value="">— اختر صنفاً من كبون الأصناف —</option>
+                    {productCards.items.map(p => (
+                      <option key={p.id} value={p.productName}>{p.productName}{p.code ? ` (${p.code})` : ''}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input name="productName" value={fpForm.productName} onChange={fpCrud.handleInput} required style={{ flex: 1 }} placeholder="اسم المنتج" />
+                    <button type="button" className="ghost-button small" onClick={() => { fpCrud.closeForm(); navigateTo('product-cards'); }}>➕ إضافة كبون أصناف</button>
+                  </div>
+                )}
+              </label>
               <label><span>التصنيف</span><input name="category" value={fpForm.category} onChange={fpCrud.handleInput} /></label>
               <label><span>الكمية</span><input name="quantity" type="number" min="0" value={fpForm.quantity} onChange={fpCrud.handleInput} /></label>
               <label><span>الوحدة</span><input name="unit" value={fpForm.unit} onChange={fpCrud.handleInput} /></label>
