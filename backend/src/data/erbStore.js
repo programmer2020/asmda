@@ -1093,6 +1093,10 @@ export async function repSaleDeduct(payload) {
 
 // ── Financial Manager Custody ─────────────────────────────────────────────────
 
+let managerTotalBudget = 0;
+export function getManagerBudget() { return managerTotalBudget; }
+export function setManagerBudget(v) { managerTotalBudget = Math.max(0, Number(v) || 0); }
+
 function mapFinManagerCustody(row) {
   return {
     id: row.id,
@@ -1110,11 +1114,11 @@ export async function getFinancialManagerCustodyData() {
   const items = result.rows.map(mapFinManagerCustody);
   const totalAmount = items.reduce((s, i) => s + i.amount, 0);
   const activeCount = items.filter(i => i.status === 'نشطة').length;
-  const closedCount = items.filter(i => i.status === 'مغلقة').length;
+  const available = Math.max(0, managerTotalBudget - totalAmount);
   const overview = [
-    { id: 'fmc-total', label: 'إجمالي العهد', value: totalAmount, type: 'currency', helper: 'موزّعة على الموظفين', tone: 'warning' },
-    { id: 'fmc-active', label: 'عهد نشطة', value: activeCount, type: 'number', helper: 'قيد الاستخدام', tone: 'accent' },
-    { id: 'fmc-closed', label: 'عهد مغلقة', value: closedCount, type: 'number', helper: 'تمت التسوية', tone: 'calm' }
+    { id: 'fmc-budget', label: 'ميزانية المدير', value: managerTotalBudget, type: 'currency', helper: 'إجمالي العهدة المخصصة للمدير', tone: 'calm' },
+    { id: 'fmc-total', label: 'موزّع على الموظفين', value: totalAmount, type: 'currency', helper: `${activeCount} عهدة نشطة`, tone: 'warning' },
+    { id: 'fmc-available', label: 'المتاح لدى المدير', value: available, type: 'currency', helper: 'الرصيد المتبقي', tone: 'accent' }
   ];
   return { overview, items };
 }
@@ -1138,6 +1142,12 @@ export async function updateFinManagerCustodyRecord(id, payload) {
 export async function deleteFinManagerCustodyRecord(id) {
   const result = await query('DELETE FROM financial_manager_custody WHERE id=$1 RETURNING id', [id]);
   return result.rowCount > 0;
+}
+
+export async function getFinManagerCustodyRecord(id) {
+  const result = await query('SELECT * FROM financial_manager_custody WHERE id = $1 LIMIT 1', [id]);
+  if (result.rows.length === 0) return null;
+  return mapFinManagerCustody(result.rows[0]);
 }
 
 // ── Raw Materials Purchases ───────────────────────────────────────────────────

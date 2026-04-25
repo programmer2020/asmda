@@ -484,6 +484,11 @@ const navigation = [
     helper: 'توزيع عهد الموظفين من عهدة المدير المالي'
   },
   {
+    id: 'custodies',
+    label: 'عهد الموظفين',
+    helper: 'عهدات الموظفين المخصصة من المدير المالي'
+  },
+  {
     id: 'raw-materials-purchases',
     label: 'مشتريات خامات',
     helper: 'تسجيل ومراجعة مشتريات الخامات'
@@ -537,11 +542,6 @@ const navigation = [
     id: 'price-list',
     label: 'قائمة اسعار',
     helper: 'إدارة المنتجات وتسعيرها'
-  },
-  {
-    id: 'custodies',
-    label: 'العهد',
-    helper: 'إدارة العهد النقدية والعينية'
   },
   {
     id: 'statement',
@@ -1628,20 +1628,8 @@ function PriceListView({
 }
 
 
-function CustodiesView({
-  custodies,
-  form,
-  editingId,
-  saving,
-  isFormOpen,
-  onOpenForm,
-  onCloseForm,
-  onChange,
-  onSubmit,
-  onEdit,
-  onDelete,
-  onManageTransactions
-}) {  return (
+function CustodiesView({ custodies, onManageTransactions }) {
+  return (
     <>
       <SummaryCards items={custodies.overview} />
 
@@ -1649,12 +1637,9 @@ function CustodiesView({
         <article className="card table-card">
           <div className="table-actions-header">
             <div>
-              <p className="eyebrow">إدارة العهد</p>
-              <h3>سجل العهد النقدية والعينية</h3>
+              <p className="eyebrow">عهد الموظفين</p>
+              <h3>سجل العهدات المخصصة للموظفين</h3>
             </div>
-            <button type="button" className="primary-button" onClick={onOpenForm}>
-              إضافة عهدة
-            </button>
           </div>
 
           <div className="table-list">
@@ -1679,74 +1664,16 @@ function CustodiesView({
                   )}
                   <div className="row-actions">
                     <button type="button" className="ghost-button small" onClick={() => onManageTransactions(item.id)}>
-                      {item.custodyType === 'نقدية' ? 'تتبع مصاريف' : 'سجل حركة'}
-                    </button>
-                    <button type="button" className="ghost-button small" onClick={() => onEdit(item)}>
-                      تعديل
-                    </button>
-                    <button type="button" className="danger-button small" onClick={() => onDelete(item.id)}>
-                      حذف
+                      تعليقات وملاحظات
                     </button>
                   </div>
                 </div>
               </article>
             ))}
+            {custodies.items.length === 0 && <p className="empty-notice">لا توجد عهدات مسجلة بعد.</p>}
           </div>
         </article>
       </section>
-
-      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل العهدة' : 'إضافة عهدة جديدة'}>
-        <form className="form-grid" onSubmit={onSubmit}>
-          <label>
-            <span>اسم المستلم</span>
-            <input name="employeeName" value={form.employeeName} onChange={onChange} required />
-          </label>
-          <label>
-            <span>نوع العهدة</span>
-            <select name="custodyType" value={form.custodyType} onChange={onChange}>
-              {custodyTypes.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </label>
-          {form.custodyType === 'نقدية' ? (
-            <label>
-              <span>قيمة العهدة</span>
-              <input name="initialAmount" type="number" min="0" step="0.01" value={form.initialAmount} onChange={onChange} required />
-            </label>
-          ) : (
-            <label>
-              <span>بيانات العهدة العينية</span>
-              <input name="itemDetails" value={form.itemDetails || ''} onChange={onChange} placeholder="مثال: لابتوب ديل - رقم 123" required />
-            </label>
-          )}
-          <label>
-            <span>حالة العهدة</span>
-            <select name="status" value={form.status} onChange={onChange}>
-              {custodyStatuses.map((status) => (
-                <option key={status} value={status}>{status}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>تاريخ التسليم</span>
-            <input name="startDate" type="date" value={form.startDate} onChange={onChange} />
-          </label>
-          <label className="full-width">
-            <span>ملاحظات</span>
-            <textarea name="notes" rows="2" value={form.notes} onChange={onChange} />
-          </label>
-
-          <div className="form-actions full-width" style={{ marginTop: '16px' }}>
-            <button type="submit" className="primary-button" disabled={saving}>
-              {saving ? 'جارٍ الحفظ...' : editingId ? 'حفظ التعديل' : 'إضافة العهدة'}
-            </button>
-            <button type="button" className="ghost-button" onClick={onCloseForm}>
-              إلغاء
-            </button>
-          </div>
-        </form>
-      </Modal>
     </>
   );
 }
@@ -1998,6 +1925,7 @@ function MainApp({ auth, onLogout }) {
   const [rmForm, setRmForm] = useState(initialRawMaterialForm);
   const [rssForm, setRssForm] = useState(initialRepSubStoreForm);
   const [fmcForm, setFmcForm] = useState(initialFinManagerCustodyForm);
+  const [fmcAssignForm, setFmcAssignForm] = useState(initialFinManagerCustodyForm);
   const [rmpForm, setRmpForm] = useState(initialRawPurchaseForm);
   const [mmpForm, setMmpForm] = useState(initialMachinePurchaseForm);
   const [mscForm, setMscForm] = useState(initialMiscPurchaseForm);
@@ -2034,11 +1962,15 @@ function MainApp({ auth, onLogout }) {
   const [transferForm, setTransferForm] = useState({ repName: '', productName: '', quantity: '', deliveryDate: '', notes: '' });
   const [transferSaving, setTransferSaving] = useState(false);
   const [repUsers, setRepUsers] = useState([]);
+  const [employeeUsers, setEmployeeUsers] = useState([]);
   const [saleDeductForm, setSaleDeductForm] = useState({ repName: '', productName: '', quantity: '' });
   const [saleDeductOpen, setSaleDeductOpen] = useState(false);
   const [saleDeductSaving, setSaleDeductSaving] = useState(false);
 
   const [fmcFormOpen, setFmcFormOpen] = useState(false);
+  const [fmcAssignOpen, setFmcAssignOpen] = useState(false);
+  const [fmcBudgetInput, setFmcBudgetInput] = useState('');
+  const [activeManagerCustodyId, setActiveManagerCustodyId] = useState('');
   const [rmpFormOpen, setRmpFormOpen] = useState(false);
   const [mmpFormOpen, setMmpFormOpen] = useState(false);
   const [mscFormOpen, setMscFormOpen] = useState(false);
@@ -2078,6 +2010,33 @@ function MainApp({ auth, onLogout }) {
     const t = setTimeout(() => setNotice(''), 5000);
     return () => clearTimeout(t);
   }, [notice]);
+
+  useEffect(() => {
+    if (!auth?.token) {
+      setEmployeeUsers([]);
+      return;
+    }
+    loadEmployeeUsers();
+  }, [auth?.token]);
+
+  async function loadEmployeeUsers() {
+    if (!auth?.token) {
+      setEmployeeUsers([]);
+      return;
+    }
+    try {
+      const res = await fetch('/api/users/options', { headers: { Authorization: `Bearer ${auth.token}` } });
+      if (!res.ok) return;
+      const data = await res.json();
+      setEmployeeUsers(
+        Array.isArray(data)
+          ? data.filter((user) => user && typeof user === 'object' && user.displayName)
+          : []
+      );
+    } catch {
+      setEmployeeUsers([]);
+    }
+  }
 
   async function loadAllData() {
     try {
@@ -2717,12 +2676,14 @@ function MainApp({ auth, onLogout }) {
   }
 
   function openCustodyForm() {
+    loadEmployeeUsers();
     setCustodyEditingId('');
     setCustodyForm(initialCustodyForm);
     setCustodyFormOpen(true);
   }
 
   function startCustodyEdit(item) {
+    loadEmployeeUsers();
     setCustodyEditingId(item.id);
     setCustodyForm({
       employeeName: item.employeeName,
@@ -2813,7 +2774,7 @@ function MainApp({ auth, onLogout }) {
   }
 
   // ── Generic CRUD helper ────────────────────────────────
-  function makeModuleCrud(apiPath, setData, form, setForm, initialForm, editingId, setEditingId, saving, setSaving, formOpen, setFormOpen, mapToPayload, mapToForm, deleteType, entityLabel) {
+  function makeModuleCrud(apiPath, setData, form, setForm, initialForm, editingId, setEditingId, saving, setSaving, formOpen, setFormOpen, mapToPayload, mapToForm, deleteType, entityLabel, afterSave) {
     function handleInput(e) { const { name, value } = e.target; setForm(c => ({ ...c, [name]: value })); }
     function openForm() { setEditingId(''); setForm(initialForm); setFormOpen(true); }
     function startEdit(item) { setEditingId(item.id); setForm(mapToForm(item)); setFormOpen(true); }
@@ -2829,6 +2790,7 @@ function MainApp({ auth, onLogout }) {
         if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
         const refreshed = await fetch(`/api${apiPath}`);
         if (refreshed.ok) setData(await refreshed.json());
+        if (afterSave) await afterSave();
         closeForm();
         setNotice(editingId ? `تم تعديل ${entityLabel} بنجاح.` : `تمت إضافة ${entityLabel} بنجاح.`);
       } catch (err) { setError(err.message); } finally { setSaving(false); }
@@ -2864,9 +2826,10 @@ function MainApp({ auth, onLogout }) {
     'rss', 'السجل');
 
   const fmcCrud = makeModuleCrud('/financial-manager-custody', setFinManagerCustody, fmcForm, setFmcForm, initialFinManagerCustodyForm, fmcEditingId, setFmcEditingId, fmcSaving, setFmcSaving, fmcFormOpen, setFmcFormOpen,
-    f => ({ ...f, amount: Number(f.amount||0) }),
+    f => ({ ...f, employeeName: auth?.user?.displayName || '', amount: Number(f.amount||0) }),
     i => ({ employeeName: i.employeeName, amount: String(i.amount), purpose: i.purpose, custodyDate: i.custodyDate||'', status: i.status, notes: i.notes||'' }),
-    'fmc', 'العهدة');
+    'fmc', 'العهدة',
+    async () => { const r = await fetch('/api/custodies'); if (r.ok) setCustodies(await r.json()); });
 
   const rmpCrud = makeModuleCrud('/raw-materials-purchases', setRawPurchases, rmpForm, setRmpForm, initialRawPurchaseForm, rmpEditingId, setRmpEditingId, rmpSaving, setRmpSaving, rmpFormOpen, setRmpFormOpen,
     f => ({ ...f, quantity: Number(f.quantity||0), unitPrice: Number(f.unitPrice||0) }),
@@ -2913,6 +2876,78 @@ function MainApp({ auth, onLogout }) {
       const custRes = await fetch('/api/custodies'); if (custRes.ok) setCustodies(await custRes.json());
       setNotice('تم التراجع عن الحركة بنجاح.');
     } catch (requestError) { setError(requestError.message); }
+  }
+
+  async function handleSetFmcBudget(e) {
+    e.preventDefault();
+    const v = Number(fmcBudgetInput);
+    if (isNaN(v) || v < 0) return;
+    try {
+      const res = await fetch('/api/financial-manager-custody/budget', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ total: v })
+      });
+      if (res.ok) {
+        setFmcBudgetInput('');
+        const fmcRes = await fetch('/api/financial-manager-custody');
+        if (fmcRes.ok) setFinManagerCustody(await fmcRes.json());
+        setNotice('تم تحديث ميزانية المدير المالي.');
+      }
+    } catch (err) { setError(err.message); }
+  }
+
+  function openFmcAssignForm(managerRecord) {
+    setActiveManagerCustodyId(managerRecord.id);
+    setFmcEditingId('');
+    setFmcAssignForm({
+      employeeName: '',
+      amount: '',
+      purpose: managerRecord.purpose || '',
+      custodyDate: managerRecord.custodyDate || getTodayLocalDateKey(),
+      status: 'نشطة',
+      notes: managerRecord.notes || ''
+    });
+    loadEmployeeUsers();
+    setFmcAssignOpen(true);
+  }
+
+  async function handleFmcAssignSubmit(e) {
+    e.preventDefault();
+    if (!activeManagerCustodyId) return;
+    try {
+      setFmcSaving(true);
+      setError('');
+      setNotice('');
+      const payload = {
+        employeeName: fmcAssignForm.employeeName,
+        amount: Number(fmcAssignForm.amount || 0),
+        custodyDate: fmcAssignForm.custodyDate || null,
+        notes: fmcAssignForm.notes || ''
+      };
+      const res = await fetch(`/api/financial-manager-custody/${activeManagerCustodyId}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'تعذر تعيين العهدة.');
+
+      const [fmcRes, custodiesRes] = await Promise.all([
+        fetch('/api/financial-manager-custody'),
+        fetch('/api/custodies')
+      ]);
+      if (fmcRes.ok) setFinManagerCustody(await fmcRes.json());
+      if (custodiesRes.ok) setCustodies(await custodiesRes.json());
+
+      setFmcAssignOpen(false);
+      setActiveManagerCustodyId('');
+      setNotice('تم تعيين عهدة الموظف وخصمها من عهدة المدير بنجاح.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setFmcSaving(false);
+    }
   }
 
   function handleConfirmDelete() {
@@ -3056,6 +3091,14 @@ function MainApp({ auth, onLogout }) {
   const displayName = auth.user.displayName;
   const avatarInitial = displayName.charAt(0).toUpperCase();
   const notificationsCount = checkNotification && !notificationDismissed ? checkNotification.count : 0;
+  const availableEmployeeUsers = Array.isArray(employeeUsers)
+    ? employeeUsers.filter((user) => user && typeof user === 'object' && user.displayName)
+    : [];
+  const employeeOptionsWithFallback = availableEmployeeUsers.length > 0
+    ? availableEmployeeUsers
+    : auth?.user?.displayName
+      ? [{ id: auth.user.id ?? 'current-user', displayName: auth.user.displayName, code: auth.user.code ?? '', role: auth.user.role }]
+      : [];
 
   return (
     <div className="app-shell" dir="rtl">
@@ -3201,16 +3244,6 @@ function MainApp({ auth, onLogout }) {
         {!loading && !error && activeView === 'custodies' ? (
           <CustodiesView
             custodies={custodies}
-            form={custodyForm}
-            editingId={custodyEditingId}
-            saving={custodiesSaving}
-            isFormOpen={custodyFormOpen}
-            onOpenForm={openCustodyForm}
-            onCloseForm={closeCustodyForm}
-            onChange={handleCustodyInputChange}
-            onSubmit={handleCustodySubmit}
-            onEdit={startCustodyEdit}
-            onDelete={requestCustodyDelete}
             onManageTransactions={openCustodyTransactions}
           />
         ) : null}
@@ -3612,6 +3645,7 @@ function MainApp({ auth, onLogout }) {
         ) : null}
 
         {!loading && !error && activeView === 'financial-manager-custody' ? (
+          <>
           <GenericCrudView
             data={finManagerCustody}
             eyebrow="عهدة المدير المالي"
@@ -3622,8 +3656,45 @@ function MainApp({ auth, onLogout }) {
             editingId={fmcEditingId}
             saving={fmcSaving}
             isFormOpen={fmcFormOpen}
-            onOpenForm={fmcCrud.openForm}
-            onCloseForm={fmcCrud.closeForm}
+            extraActions={
+              <form onSubmit={handleSetFmcBudget} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="ميزانية المدير (ج.م)"
+                  value={fmcBudgetInput}
+                  onChange={e => setFmcBudgetInput(e.target.value)}
+                  style={{ width: '170px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+                />
+                <button type="submit" className="ghost-button small">تعيين الميزانية</button>
+              </form>
+            }
+            onOpenForm={() => {
+              if (auth?.user?.role !== 'manager' && auth?.user?.role !== 'admin') {
+                setError('إضافة عهدة المدير متاحة للمدير فقط.');
+                return;
+              }
+              loadEmployeeUsers();
+              setFmcAssignOpen(false);
+              setFmcEditingId('');
+              setFmcAssignForm(initialFinManagerCustodyForm);
+              setActiveManagerCustodyId('');
+              setFmcForm({
+                employeeName: '',
+                amount: '',
+                purpose: '',
+                custodyDate: getTodayLocalDateKey(),
+                status: 'نشطة',
+                notes: ''
+              });
+              fmcCrud.openForm();
+            }}
+            onCloseForm={() => {
+              setActiveManagerCustodyId('');
+              setFmcAssignOpen(false);
+              fmcCrud.closeForm();
+            }}
             onSubmit={fmcCrud.handleSubmit}
             onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
@@ -3639,21 +3710,52 @@ function MainApp({ auth, onLogout }) {
                 <div className="table-side">
                   <strong>{formatMoney(item.amount)}</strong>
                   <div className="row-actions">
-                    <button type="button" className="ghost-button small" onClick={() => fmcCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="ghost-button small" onClick={() => openFmcAssignForm(item)}>تعيين</button>
                     <button type="button" className="danger-button small" onClick={() => fmcCrud.requestDelete(item.id)}>حذف</button>
                   </div>
                 </div>
               </article>
             )}
             formFields={<>
-              <label><span>اسم الموظف</span><input name="employeeName" value={fmcForm.employeeName} onChange={fmcCrud.handleInput} required /></label>
-              <label><span>المبلغ</span><input name="amount" type="number" min="0" step="0.01" value={fmcForm.amount} onChange={fmcCrud.handleInput} required /></label>
-              <label><span>الغرض</span><input name="purpose" value={fmcForm.purpose} onChange={fmcCrud.handleInput} /></label>
-              <label><span>التاريخ</span><input name="custodyDate" type="date" value={fmcForm.custodyDate} onChange={fmcCrud.handleInput} /></label>
-              <label><span>الحالة</span><select name="status" value={fmcForm.status} onChange={fmcCrud.handleInput}>{custodyStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
-              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={fmcForm.notes} onChange={fmcCrud.handleInput} /></label>
+              <>
+                <label><span>اسم الموظف</span>
+                  <select name="employeeName" value={fmcForm.employeeName} onChange={fmcCrud.handleInput} required>
+                    <option value="">{employeeOptionsWithFallback.length > 0 ? '— اختر موظفًا —' : 'لا يوجد موظفون متاحون'}</option>
+                    {employeeOptionsWithFallback.map((user) => (
+                      <option key={user.id ?? user.displayName} value={user.displayName}>
+                        {user.displayName}{user.code ? ` (${user.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label><span>قيمة العهدة</span><input name="amount" type="number" min="0" step="0.01" value={fmcForm.amount} onChange={fmcCrud.handleInput} required /></label>
+                <label><span>الغرض</span><input name="purpose" value={fmcForm.purpose} onChange={fmcCrud.handleInput} /></label>
+                <label><span>التاريخ</span><input name="custodyDate" type="date" value={fmcForm.custodyDate} onChange={fmcCrud.handleInput} /></label>
+                <label><span>الحالة</span><select name="status" value={fmcForm.status} onChange={fmcCrud.handleInput}>{custodyStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+                <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={fmcForm.notes} onChange={fmcCrud.handleInput} /></label>
+              </>
             </>}
           />
+          <Modal isOpen={fmcAssignOpen} onClose={() => { setFmcAssignOpen(false); setActiveManagerCustodyId(''); }} title="تعيين عهدة موظف">
+            <form className="form-grid" onSubmit={handleFmcAssignSubmit}>
+              <label><span>اسم الموظف</span>
+                <select name="employeeName" value={fmcAssignForm.employeeName} onChange={e => setFmcAssignForm(c => ({ ...c, employeeName: e.target.value }))} required>
+                  <option value="">{employeeOptionsWithFallback.length > 0 ? '— اختر موظفًا —' : 'لا يوجد موظفون متاحون'}</option>
+                  {employeeOptionsWithFallback.map((user) => (
+                    <option key={user.id ?? user.displayName} value={user.displayName}>{user.displayName}{user.code ? ` (${user.code})` : ''}</option>
+                  ))}
+                </select>
+              </label>
+              <label><span>المبلغ المعين</span><input name="amount" type="number" min="0" step="0.01" value={fmcAssignForm.amount} onChange={e => setFmcAssignForm(c => ({ ...c, amount: e.target.value }))} required /></label>
+              <label><span>التاريخ</span><input name="custodyDate" type="date" value={fmcAssignForm.custodyDate} onChange={e => setFmcAssignForm(c => ({ ...c, custodyDate: e.target.value }))} /></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={fmcAssignForm.notes} onChange={e => setFmcAssignForm(c => ({ ...c, notes: e.target.value }))} /></label>
+              <div className="form-actions full-width" style={{ marginTop: '16px' }}>
+                <button type="submit" className="primary-button" disabled={fmcSaving}>{fmcSaving ? 'جارٍ الحفظ...' : 'حفظ التعيين'}</button>
+                <button type="button" className="ghost-button" onClick={() => { setFmcAssignOpen(false); setActiveManagerCustodyId(''); }}>إلغاء</button>
+              </div>
+            </form>
+          </Modal>
+          </>
         ) : null}
 
         {!loading && !error && activeView === 'raw-materials-purchases' ? (

@@ -46,8 +46,11 @@ import {
   deleteRepSubStoreRecord,
   getFinancialManagerCustodyData,
   createFinManagerCustodyRecord,
+  getFinManagerCustodyRecord,
   updateFinManagerCustodyRecord,
   deleteFinManagerCustodyRecord,
+  getManagerBudget,
+  setManagerBudget,
   getRawMaterialsPurchasesData,
   createRawPurchaseRecord,
   updateRawPurchaseRecord,
@@ -664,11 +667,61 @@ app.put('/api/rep-sub-stores/:id', async (req, res) => {
 app.delete('/api/rep-sub-stores/:id', async (req, res) => { try { const d = await deleteRepSubStoreRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
 
 // ── Financial Manager Custody ────────────────────────────────────────────────
+app.get('/api/financial-manager-custody/budget', (_req, res) => {
+  res.json({ total: getManagerBudget() });
+});
+app.put('/api/financial-manager-custody/budget', (req, res) => {
+  const v = Number(req.body.total);
+  if (isNaN(v) || v < 0) { res.status(400).json({ message: 'قيمة غير صالحة.' }); return; }
+  setManagerBudget(v);
+  res.json({ total: getManagerBudget() });
+});
 app.get('/api/financial-manager-custody', async (_req, res) => { try { res.json(await getFinancialManagerCustodyData()); } catch (e) { res.status(500).json({ message: e.message }); } });
 app.post('/api/financial-manager-custody', async (req, res) => {
   if (!req.body.employeeName) { res.status(400).json({ message: 'يرجى إدخال اسم الموظف.' }); return; }
   if (Number(req.body.amount) <= 0) { res.status(400).json({ message: 'قيمة العهدة يجب أن تكون أكبر من صفر.' }); return; }
-  try { res.status(201).json(await createFinManagerCustodyRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+  try {
+    const fmcRecord = await createFinManagerCustodyRecord(req.body);
+    // إنشاء عهدة تلقائية للموظف في جدول العهد
+    await createCustodyRecord({
+      employeeName: req.body.employeeName,
+      custodyType: 'نقدية',
+      initialAmount: Number(req.body.amount),
+      startDate: req.body.custodyDate || null,
+      status: 'نشطة',
+      notes: req.body.notes || ''
+    });
+    res.status(201).json(fmcRecord);
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.post('/api/financial-manager-custody/:id/assign', async (req, res) => {
+  const amount = Number(req.body.amount);
+  if (!req.body.employeeName) { res.status(400).json({ message: 'يرجى اختيار الموظف.' }); return; }
+  if (amount <= 0) { res.status(400).json({ message: 'قيمة التعيين يجب أن تكون أكبر من صفر.' }); return; }
+
+  try {
+    const managerRecord = await getFinManagerCustodyRecord(req.params.id);
+    if (!managerRecord) { res.status(404).json({ message: 'عهدة المدير غير موجودة.' }); return; }
+    if (managerRecord.status !== 'نشطة') { res.status(400).json({ message: 'لا يمكن التعيين من عهدة غير نشطة.' }); return; }
+    if (amount > Number(managerRecord.amount || 0)) { res.status(400).json({ message: 'المبلغ المطلوب أكبر من رصيد عهدة المدير.' }); return; }
+
+    await updateFinManagerCustodyRecord(req.params.id, {
+      amount: Number(managerRecord.amount || 0) - amount
+    });
+
+    const createdCustody = await createCustodyRecord({
+      employeeName: req.body.employeeName,
+      custodyType: 'نقدية',
+      initialAmount: amount,
+      startDate: req.body.custodyDate || null,
+      status: 'نشطة',
+      notes: req.body.notes || ''
+    });
+
+    res.status(201).json(createdCustody);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 app.put('/api/financial-manager-custody/:id', async (req, res) => {
   if (!req.body.employeeName) { res.status(400).json({ message: 'يرجى إدخال اسم الموظف.' }); return; }
@@ -812,6 +865,10 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
   if (!user) { res.status(404).json({ message: 'المستخدم غير موجود.' }); return; }
   const { passwordHash: _, ...safe } = user;
   res.json({ ...safe, roleLabel: ROLE_LABELS[safe.role], pages: ROLE_PAGES[safe.role] });
+});
+
+app.get('/api/users/options', authMiddleware, (_req, res) => {
+  res.json(getAllUsers().map(({ id, displayName, code, role }) => ({ id, displayName, code, role })));
 });
 
 // ── User management (admin only) ──

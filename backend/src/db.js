@@ -34,39 +34,94 @@ function isLocalMode() {
   return dataMode === 'local';
 }
 
+// In-memory store for local mode — persists for the lifetime of the process
+const mockData = {
+  direct_sales: [
+    { id: 'SAL-1001', customer_name: 'عميل محلي 1', product_name: 'منتج أ', amount: 1500, status: 'مكتملة', sales_rep: 'أحمد', sale_date: new Date(), created_at: new Date() },
+    { id: 'SAL-1002', customer_name: 'عميل محلي 2', product_name: 'منتج ب', amount: 2300, status: 'جديدة', sales_rep: 'سارة', sale_date: new Date(), created_at: new Date() }
+  ],
+  installment_sales: [
+    { id: 'CRD-1001', customer_name: 'عميل آجل 1', invoice_number: 'INV-001', amount: 5000, paid_amount: 1000, due_date: new Date(), status: 'مستحقة', sales_rep: 'محمد', created_at: new Date() }
+  ],
+  return_sales: [
+    { id: 'RET-1001', customer_name: 'عميل مرتجع 1', original_invoice_number: 'INV-005', amount: 500, reason: 'تالف', return_date: new Date(), status: 'قيد المراجعة', sales_rep: 'سامي', created_at: new Date() }
+  ],
+  price_list: [
+    { id: 'PRC-1001', product_name: 'منتج أ', category: 'فئة 1', purchase_price: 1000, selling_price: 1500, created_at: new Date() },
+    { id: 'PRC-1002', product_name: 'منتج ب', category: 'فئة 2', purchase_price: 2000, selling_price: 2500, created_at: new Date() }
+  ],
+  custodies: [
+    { id: 'CST-1001', employee_name: 'موظف 1', custody_type: 'نقدية', item_details: '', initial_amount: 1000, current_balance: 800, start_date: new Date(), status: 'نشطة', created_at: new Date() }
+  ],
+  custody_transactions: [
+    { id: 'CTX-1001', custody_id: 'CST-1001', transaction_type: 'صرف', amount: 200, date: new Date(), notes: 'مصاريف نثرية', created_at: new Date() }
+  ],
+  financial_manager_custody: [],
+  raw_materials_purchases: [],
+  machine_maintenance_purchases: [],
+  misc_purchases: [],
+  payments: [],
+  customer_payments_accounts: [],
+  free_samples: [],
+  product_cards: [],
+  final_product_store: [],
+  raw_materials_store: [],
+  rep_sub_stores: [],
+  tasks: [
+    { id: 1, title: 'تهيئة النظام', description: 'بدأ العمل على النظام الجديد', status: 'done', created_at: new Date() }
+  ]
+};
+
 export async function query(text, params = []) {
   if (isLocalMode()) {
-    const tableName = text.match(/FROM\s+([a-zA-Z0-9_]+)/i)?.[1];
-    
-    const mockData = {
-      direct_sales: [
-        { id: 'SAL-1001', customer_name: 'عميل محلي 1', product_name: 'منتج أ', amount: 1500, status: 'مكتملة', sales_rep: 'أحمد', sale_date: new Date(), created_at: new Date() },
-        { id: 'SAL-1002', customer_name: 'عميل محلي 2', product_name: 'منتج ب', amount: 2300, status: 'جديدة', sales_rep: 'سارة', sale_date: new Date(), created_at: new Date() }
-      ],
-      installment_sales: [
-        { id: 'CRD-1001', customer_name: 'عميل آجل 1', invoice_number: 'INV-001', amount: 5000, paid_amount: 1000, due_date: new Date(), status: 'مستحقة', sales_rep: 'محمد', created_at: new Date() }
-      ],
-      return_sales: [
-        { id: 'RET-1001', customer_name: 'عميل مرتجع 1', original_invoice_number: 'INV-005', amount: 500, reason: 'تالف', return_date: new Date(), status: 'قيد المراجعة', sales_rep: 'سامي', created_at: new Date() }
-      ],
-      price_list: [
-        { id: 'PRC-1001', product_name: 'منتج أ', category: 'فئة 1', purchase_price: 1000, selling_price: 1500, created_at: new Date() },
-        { id: 'PRC-1002', product_name: 'منتج ب', category: 'فئة 2', purchase_price: 2000, selling_price: 2500, created_at: new Date() }
-      ],
-      custodies: [
-        { id: 'CST-1001', employee_name: 'موظف 1', custody_type: 'نقدية', item_details: '', initial_amount: 1000, current_balance: 800, start_date: new Date(), status: 'نشطة', created_at: new Date() }
-      ],
-      custody_transactions: [
-        { id: 'CTX-1001', custody_id: 'CST-1001', transaction_type: 'صرف', amount: 200, date: new Date(), notes: 'مصاريف نثرية', created_at: new Date() }
-      ],
-      tasks: [
-        { id: 1, title: 'تهيئة النظام', description: 'بدأ العمل على النظام الجديد', status: 'done', created_at: new Date() }
-      ]
-    };
+    // INSERT ... RETURNING: build row from column list, persist to mockData
+    if (/^\s*INSERT\s+INTO\s+/i.test(text) && /RETURNING/i.test(text)) {
+      const tableName = text.match(/INSERT\s+INTO\s+(\w+)/i)?.[1];
+      const colMatch = text.match(/\(([^)]+)\)\s+VALUES/i);
+      const row = { created_at: new Date() };
+      if (colMatch) {
+        const columns = colMatch[1].split(',').map(c => c.trim());
+        columns.forEach((col, i) => { row[col] = params[i]; });
+      }
+      if (tableName) {
+        if (!mockData[tableName]) mockData[tableName] = [];
+        mockData[tableName].unshift(row);
+      }
+      return { rows: [row], rowCount: 1 };
+    }
 
+    // UPDATE ... RETURNING: apply changes to existing record in mockData
+    if (/^\s*UPDATE\s+/i.test(text) && /RETURNING/i.test(text)) {
+      const tableName = text.match(/UPDATE\s+(\w+)/i)?.[1];
+      const id = params[0];
+      const table = mockData[tableName];
+      const existing = table?.find(r => r.id === id) ?? { id };
+      const setClauses = text.match(/SET\s+(.+?)\s+WHERE/is)?.[1] ?? '';
+      const re = /\b(\w+)\s*=\s*(?:COALESCE\(\s*)?\$(\d+)/gi;
+      let m;
+      while ((m = re.exec(setClauses)) !== null) {
+        const val = params[parseInt(m[2], 10) - 1];
+        if (val !== undefined) existing[m[1]] = val;
+      }
+      return { rows: [existing], rowCount: 1 };
+    }
+
+    // DELETE FROM: remove record from mockData
+    if (/^\s*DELETE\s+FROM\s+/i.test(text)) {
+      const tableName = text.match(/DELETE\s+FROM\s+(\w+)/i)?.[1];
+      const id = params[0];
+      if (tableName && mockData[tableName]) {
+        mockData[tableName] = mockData[tableName].filter(r => r.id !== id);
+      }
+      if (/RETURNING/i.test(text)) return { rows: [{ id }], rowCount: 1 };
+      return { rows: [], rowCount: 1 };
+    }
+
+    // SELECT: return from mockData
+    const tableName = text.match(/FROM\s+([a-zA-Z0-9_]+)/i)?.[1];
     return {
-      rows: mockData[tableName] || [],
-      rowCount: (mockData[tableName] || []).length
+      rows: mockData[tableName] ? [...mockData[tableName]] : [],
+      rowCount: mockData[tableName]?.length ?? 0
     };
   }
   return pool.query(text, params);
