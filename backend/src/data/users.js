@@ -10,6 +10,7 @@ export const ALL_PAGES = [
   { id: 'raw-materials-catalog', label: 'تسجيل الخامات' },
   { id: 'suppliers', label: 'تسجيل الموردين' },
   { id: 'rep-sub-stores', label: 'مخازن المناديب' },
+  { id: 'reps-management', label: 'إدارة المناديب' },
   { id: 'financial-manager-custody', label: 'عهدة المدير المالي' },
   { id: 'raw-materials-purchases', label: 'مشتريات خامات' },
   { id: 'machine-maintenance-purchases', label: 'مشتريات صيانة مكن' },
@@ -29,7 +30,7 @@ export const ALL_PAGES = [
 // Mutable roles store
 let _roles = [
   { id: 'admin',      label: 'مدير النظام', isSystem: true,  pages: '*' },
-  { id: 'manager',    label: 'مدير',        isSystem: false, pages: ['dashboard','notifications','product-cards','final-product-store','raw-materials-packaging-store','raw-materials-catalog','suppliers','rep-sub-stores','financial-manager-custody','raw-materials-purchases','machine-maintenance-purchases','misc-purchases','payroll-advances','sales','checks','returns','customer-payment-alerts','free-samples','credit-sales','price-list','custodies','statement'] },
+  { id: 'manager',    label: 'مدير',        isSystem: false, pages: ['dashboard','notifications','product-cards','final-product-store','raw-materials-packaging-store','raw-materials-catalog','suppliers','rep-sub-stores','reps-management','financial-manager-custody','raw-materials-purchases','machine-maintenance-purchases','misc-purchases','payroll-advances','sales','checks','returns','customer-payment-alerts','free-samples','credit-sales','price-list','custodies','statement'] },
   { id: 'sales',      label: 'مبيعات',      isSystem: false, pages: ['dashboard','notifications','sales','credit-sales','returns','customer-payment-alerts','free-samples','price-list','checks','statement'] },
   { id: 'warehouse',  label: 'مخازن',       isSystem: false, pages: ['dashboard','notifications','product-cards','final-product-store','raw-materials-packaging-store','raw-materials-catalog','suppliers','rep-sub-stores','raw-materials-purchases','machine-maintenance-purchases','misc-purchases'] },
   { id: 'accountant', label: 'محاسب',       isSystem: false, pages: ['dashboard','notifications','checks','custodies','financial-manager-custody','payroll-advances','statement','sales','credit-sales','returns'] },

@@ -36,26 +36,12 @@ function isLocalMode() {
 
 // In-memory store for local mode — persists for the lifetime of the process
 const mockData = {
-  direct_sales: [
-    { id: 'SAL-1001', customer_name: 'عميل محلي 1', product_name: 'منتج أ', amount: 1500, status: 'مكتملة', sales_rep: 'أحمد', sale_date: new Date(), created_at: new Date() },
-    { id: 'SAL-1002', customer_name: 'عميل محلي 2', product_name: 'منتج ب', amount: 2300, status: 'جديدة', sales_rep: 'سارة', sale_date: new Date(), created_at: new Date() }
-  ],
-  installment_sales: [
-    { id: 'CRD-1001', customer_name: 'عميل آجل 1', invoice_number: 'INV-001', amount: 5000, paid_amount: 1000, due_date: new Date(), status: 'مستحقة', sales_rep: 'محمد', created_at: new Date() }
-  ],
-  return_sales: [
-    { id: 'RET-1001', customer_name: 'عميل مرتجع 1', original_invoice_number: 'INV-005', amount: 500, reason: 'تالف', return_date: new Date(), status: 'قيد المراجعة', sales_rep: 'سامي', created_at: new Date() }
-  ],
-  price_list: [
-    { id: 'PRC-1001', product_name: 'منتج أ', category: 'فئة 1', purchase_price: 1000, selling_price: 1500, created_at: new Date() },
-    { id: 'PRC-1002', product_name: 'منتج ب', category: 'فئة 2', purchase_price: 2000, selling_price: 2500, created_at: new Date() }
-  ],
-  custodies: [
-    { id: 'CST-1001', employee_name: 'موظف 1', custody_type: 'نقدية', item_details: '', initial_amount: 1000, current_balance: 800, start_date: new Date(), status: 'نشطة', created_at: new Date() }
-  ],
-  custody_transactions: [
-    { id: 'CTX-1001', custody_id: 'CST-1001', transaction_type: 'صرف', amount: 200, date: new Date(), notes: 'مصاريف نثرية', created_at: new Date() }
-  ],
+  direct_sales: [],
+  installment_sales: [],
+  return_sales: [],
+  price_list: [],
+  custodies: [],
+  custody_transactions: [],
   financial_manager_custody: [],
   raw_materials_purchases: [],
   machine_maintenance_purchases: [],
@@ -67,9 +53,7 @@ const mockData = {
   final_product_store: [],
   raw_materials_store: [],
   rep_sub_stores: [],
-  tasks: [
-    { id: 1, title: 'تهيئة النظام', description: 'بدأ العمل على النظام الجديد', status: 'done', created_at: new Date() }
-  ]
+  tasks: []
 };
 
 export async function query(text, params = []) {

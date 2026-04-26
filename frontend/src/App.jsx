@@ -171,6 +171,147 @@ function UsersPage({ token }) {
   );
 }
 
+function RepsPage({ token }) {
+  const [reps, setReps] = useState([]);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingRep, setEditingRep] = useState(null);
+  const [form, setForm] = useState({ username: '', password: '', displayName: '', code: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const noticeTimer = useRef(null);
+
+  function showNotice(message) {
+    setNotice(message);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(''), 5000);
+  }
+
+  async function load() {
+    const response = await fetch('/api/reps', { headers: { Authorization: `Bearer ${token}` } });
+    if (response.ok) {
+      setReps(await response.json());
+      return;
+    }
+    const data = await response.json().catch(() => ({}));
+    setError(data.message || 'تعذر تحميل بيانات المناديب.');
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function openAdd() {
+    setEditingRep(null);
+    setForm({ username: '', password: '', displayName: '', code: '' });
+    setError('');
+    setFormOpen(true);
+  }
+
+  function openEdit(rep) {
+    setEditingRep(rep);
+    setForm({ username: rep.username, password: '', displayName: rep.displayName, code: rep.code || '' });
+    setError('');
+    setFormOpen(true);
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const payload = editingRep
+        ? { displayName: form.displayName, code: form.code, ...(form.password ? { password: form.password } : {}) }
+        : { username: form.username, password: form.password, displayName: form.displayName, code: form.code };
+      const url = editingRep ? `/api/reps/${editingRep.id}` : '/api/reps';
+      const method = editingRep ? 'PUT' : 'POST';
+      const response = await fetch(url, { method, headers: authHeaders(token), body: JSON.stringify(payload) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.message || 'تعذر حفظ المندوب.');
+        return;
+      }
+      await load();
+      setFormOpen(false);
+      showNotice(editingRep ? 'تم تعديل بيانات المندوب.' : 'تمت إضافة المندوب بنجاح.');
+    } catch {
+      setError('تعذر الاتصال بالخادم.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id) {
+    setDeleteTarget(null);
+    const response = await fetch(`/api/reps/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    if (response.ok || response.status === 204) {
+      await load();
+      showNotice('تم حذف المندوب.');
+      return;
+    }
+    const data = await response.json().catch(() => ({}));
+    setError(data.message || 'تعذر حذف المندوب.');
+  }
+
+  return (
+    <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
+      {notice ? (
+        <div className="notice success" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
+        </div>
+      ) : null}
+      {error ? <div className="notice error">{error}</div> : null}
+
+      <article className="card table-card">
+        <div className="table-actions-header">
+          <div>
+            <p className="eyebrow">المناديب</p>
+            <h3>إضافة وإدارة المناديب</h3>
+          </div>
+          <button type="button" className="primary-button" onClick={openAdd}>إضافة مندوب</button>
+        </div>
+
+        <div className="table-list">
+          {reps.map((rep) => (
+            <article key={rep.id} className="table-row">
+              <div className="table-main">
+                <div className="record-top">
+                  <strong>{rep.displayName}</strong>
+                  <span className="status-chip neutral">{rep.username}</span>
+                  {rep.code ? <span className="status-chip info">{rep.code}</span> : null}
+                </div>
+              </div>
+              <div className="table-side">
+                <div className="row-actions">
+                  <button type="button" className="ghost-button small" onClick={() => openEdit(rep)}>تعديل</button>
+                  <button type="button" className="danger-button small" onClick={() => setDeleteTarget(rep.id)}>حذف</button>
+                </div>
+              </div>
+            </article>
+          ))}
+          {reps.length === 0 ? <p className="empty-notice">لا يوجد مناديب حتى الآن.</p> : null}
+        </div>
+      </article>
+
+      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingRep ? 'تعديل مندوب' : 'إضافة مندوب جديد'}>
+        {error ? <div className="notice error" style={{ marginBottom: '12px' }}>{error}</div> : null}
+        <form className="form-grid" onSubmit={handleSubmit}>
+          <label><span>الاسم الظاهر</span><input value={form.displayName} onChange={(e) => setForm((current) => ({ ...current, displayName: e.target.value }))} required /></label>
+          <label><span>كود المندوب</span><input value={form.code} onChange={(e) => setForm((current) => ({ ...current, code: e.target.value }))} placeholder="مثال: REP-001" /></label>
+          <label><span>اسم المستخدم</span><input value={form.username} onChange={(e) => setForm((current) => ({ ...current, username: e.target.value }))} required={!editingRep} disabled={!!editingRep} /></label>
+          <label><span>{editingRep ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور'}</span><input type="password" value={form.password} onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))} required={!editingRep} autoComplete="new-password" /></label>
+          <div className="form-actions full-width" style={{ marginTop: '16px' }}>
+            <button type="submit" className="primary-button" disabled={saving}>{saving ? 'جارٍ الحفظ...' : editingRep ? 'حفظ التعديل' : 'إضافة'}</button>
+            <button type="button" className="ghost-button" onClick={() => setFormOpen(false)}>إلغاء</button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmModal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={() => handleDelete(deleteTarget)} title="حذف مندوب" message="هل أنت متأكد من حذف هذا المندوب؟ لا يمكن التراجع." />
+    </section>
+  );
+}
+
 // ── Roles Management Page ────────────────────────────────────────────────────
 function RolesPage({ token }) {
   const [roles, setRoles] = useState([]);
@@ -432,6 +573,7 @@ const views = [
   'notifications',
   'users',
   'roles',
+  'reps-management',
   'product-cards',
   'final-product-store',
   'raw-materials-packaging-store',
@@ -489,6 +631,11 @@ const navigation = [
     id: 'rep-sub-stores',
     label: 'مخازن فرعية للمناديب',
     helper: 'متابعة العهد والمخزون لدى المناديب'
+  },
+  {
+    id: 'reps-management',
+    label: 'إضافة وإدارة المناديب',
+    helper: 'إدارة حسابات المناديب وصلاحيات الدخول'
   },
   {
     id: 'financial-manager-custody',
@@ -586,7 +733,7 @@ const navigationGroups = [
   {
     id: 'administration',
     label: 'إدارة النظام',
-    items: ['users', 'roles']
+    items: ['reps-management', 'users', 'roles']
   }
 ];
 
@@ -1239,6 +1386,9 @@ function DashboardView({ dashboard, onNavigate, activeView }) {
 function SalesView({
   sales,
   form,
+  salesRepOptions,
+  salesProductOptions,
+  customerOptions,
   editingId,
   saving,
   isFormOpen,
@@ -1299,11 +1449,27 @@ function SalesView({
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل</span>
-            <input name="customerName" value={form.customerName} onChange={onChange} />
+            <select name="customerName" value={form.customerName} onChange={onChange} required>
+              <option value="">{salesRepOptions.length > 0 ? '— اختر عميلاً —' : 'لا يوجد عملاء متاحون'}</option>
+              {salesRepOptions.map((repName) => (
+                <option key={repName} value={repName}>{repName}</option>
+              ))}
+              {form.customerName && !salesRepOptions.includes(form.customerName) ? (
+                <option value={form.customerName}>{form.customerName}</option>
+              ) : null}
+            </select>
           </label>
           <label>
             <span>اسم المنتج</span>
-            <input name="productName" value={form.productName} onChange={onChange} />
+            <select name="productName" value={form.productName} onChange={onChange} required>
+              <option value="">{salesProductOptions.length > 0 ? '— اختر منتجًا —' : 'لا توجد منتجات متاحة'}</option>
+              {salesProductOptions.map((productName) => (
+                <option key={productName} value={productName}>{productName}</option>
+              ))}
+              {form.productName && !salesProductOptions.includes(form.productName) ? (
+                <option value={form.productName}>{form.productName}</option>
+              ) : null}
+            </select>
           </label>
           <label>
             <span>القيمة</span>
@@ -1319,10 +1485,7 @@ function SalesView({
               ))}
             </select>
           </label>
-          <label>
-            <span>مسؤول المبيعات</span>
-            <input name="salesRep" value={form.salesRep} onChange={onChange} />
-          </label>
+
           <label>
             <span>تاريخ البيع</span>
             <input name="saleDate" type="date" value={form.saleDate} onChange={onChange} />
@@ -1918,7 +2081,10 @@ export default function App() {
 
 function MainApp({ auth, onLogout }) {
   const userPages = auth.user.pages; // '*' or array
-  function canAccess(id) { return userPages === '*' || userPages.includes(id); }
+  function canAccess(id) {
+    if (id === 'reps-management') return auth.user.role === 'admin' || auth.user.role === 'manager';
+    return userPages === '*' || userPages.includes(id);
+  }
   const isAdmin = auth.user.role === 'admin';
 
   const filteredNavigation = [
@@ -1944,6 +2110,7 @@ function MainApp({ auth, onLogout }) {
   }
 
   const [activeView, setActiveView] = useState(getInitialView);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [viewHistory, setViewHistory] = useState([]);
   const [dashboard, setDashboard] = useState(initialDashboard);
   const [sales, setSales] = useState(initialSales);
@@ -2167,103 +2334,8 @@ function MainApp({ auth, onLogout }) {
     } catch { setError('تعذر تحميل البيانات من الخادم.'); } finally { setLoading(false); }
   }
 
-  // Initialize demo data
+  // Initialize data
   useEffect(() => {
-    const demoSales = {
-      overview: [
-        { id: 'sales-count', label: 'عدد الفواتير', value: 3, type: 'number', helper: 'فواتير المبيعات', tone: 'accent' },
-        { id: 'sales-total', label: 'إجمالي المبيعات', value: 45000, type: 'currency', helper: 'القيمة الإجمالية', tone: 'accent' }
-      ],
-      items: [
-        {
-          id: '1',
-          customerName: 'محمد علي',
-          productName: 'منتج أ',
-          amount: 15000,
-          status: 'مكتملة',
-          salesRep: 'أحمد محمد',
-          saleDate: '2026-04-15',
-          notes: 'تم التسليم بنجاح'
-        },
-        {
-          id: '2',
-          customerName: 'محمد علي',
-          productName: 'منتج ب',
-          amount: 20000,
-          status: 'مكتملة',
-          salesRep: 'أحمد محمد',
-          saleDate: '2026-04-18',
-          notes: ''
-        },
-        {
-          id: '3',
-          customerName: 'فاطمة أحمد',
-          productName: 'منتج ج',
-          amount: 10000,
-          status: 'جديدة',
-          salesRep: 'فرح السيد',
-          saleDate: '2026-04-20',
-          notes: 'جديدة'
-        }
-      ]
-    };
-
-    const demoCreditSales = {
-      overview: [
-        { id: 'credit-count', label: 'عدد الفواتير الآجلة', value: 2, type: 'number', helper: 'فواتير الآجل', tone: 'warning' },
-        { id: 'credit-remaining', label: 'المبلغ المستحق', value: 35000, type: 'currency', helper: 'لم يتم السداد', tone: 'alert' }
-      ],
-      items: [
-        {
-          id: 'c1',
-          customerName: 'محمد علي',
-          invoiceNumber: 'INV-001',
-          amount: 25000,
-          paidAmount: 5000,
-          status: 'مسدد جزئيا',
-          salesRep: 'أحمد محمد',
-          dueDate: '2026-05-15',
-          notes: 'دفعة أولى وصلت',
-          remainingAmount: 20000
-        },
-        {
-          id: 'c2',
-          customerName: 'فاطمة أحمد',
-          invoiceNumber: 'INV-002',
-          amount: 15000,
-          paidAmount: 0,
-          status: 'مستحقة',
-          salesRep: 'فرح السيد',
-          dueDate: '2026-04-28',
-          notes: '',
-          remainingAmount: 15000
-        }
-      ]
-    };
-
-    const demoReturns = {
-      overview: [
-        { id: 'returns-count', label: 'عدد المرتجعات', value: 1, type: 'number', helper: 'مرتجعات', tone: 'neutral' },
-        { id: 'returns-amount', label: 'قيمة المرتجعات', value: 3000, type: 'currency', helper: 'إشعارات دائنة', tone: 'calm' }
-      ],
-      items: [
-        {
-          id: 'r1',
-          customerName: 'محمد علي',
-          originalInvoiceNumber: 'INV-001',
-          amount: 3000,
-          reason: 'عيب في المنتج',
-          status: 'تم التعويض',
-          salesRep: 'أحمد محمد',
-          returnDate: '2026-04-19',
-          notes: 'تم الاستبدال بمنتج جديد'
-        }
-      ]
-    };
-
-    setSales(demoSales);
-    setCreditSales(demoCreditSales);
-    setReturns(demoReturns);
     loadAllData();
   }, []);
 
@@ -2271,6 +2343,7 @@ function MainApp({ auth, onLogout }) {
     setViewHistory((prev) => [...prev, activeView]);
     setActiveView(view);
     window.location.hash = view;
+    setIsMobileMenuOpen(false);
   }
 
   function goBack() {
@@ -2527,7 +2600,18 @@ function MainApp({ auth, onLogout }) {
   // ── Sales ──────────────────────────────────────────────
   function handleSalesInputChange(event) {
     const { name, value } = event.target;
-    setSalesForm((current) => ({ ...current, [name]: value }));
+    setSalesForm((current) => {
+      if (name === 'salesRep') {
+        const repProducts = Array.from(salesProductsByRep[value] || []);
+        const keepCurrentProduct = repProducts.includes(current.productName);
+        return {
+          ...current,
+          salesRep: value,
+          productName: keepCurrentProduct ? current.productName : ''
+        };
+      }
+      return { ...current, [name]: value };
+    });
   }
 
   function openSalesForm() {
@@ -2560,7 +2644,7 @@ function MainApp({ auth, onLogout }) {
     event.preventDefault();
     try {
       setSalesSaving(true); setError(''); setNotice('');
-      const payload = { ...salesForm, amount: Number(salesForm.amount) };
+      const payload = { ...salesForm, amount: Number(salesForm.amount), salesRep: salesForm.customerName };
       const url = salesEditingId ? `/api/sales/${salesEditingId}` : '/api/sales';
       const method = salesEditingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -3275,6 +3359,27 @@ function MainApp({ auth, onLogout }) {
   const supplierNameOptions = Array.isArray(suppliers?.items)
     ? suppliers.items.map((item) => item?.name).filter(Boolean)
     : [];
+  const salesRepOptions = Array.from(new Set([
+    ...availableEmployeeUsers.filter((user) => user.role === 'sales').map((user) => user.displayName).filter(Boolean),
+    ...(repSubStores?.items || []).map((item) => item?.repName).filter(Boolean)
+  ]));
+  const salesProductsByRep = (repSubStores?.items || []).reduce((acc, item) => {
+    const repName = item?.repName;
+    const productName = item?.productName;
+    if (!repName || !productName) return acc;
+    if (!acc[repName]) acc[repName] = new Set();
+    acc[repName].add(productName);
+    return acc;
+  }, {});
+  const allSalesProductOptions = Array.from(new Set((repSubStores?.items || []).map((item) => item?.productName).filter(Boolean)));
+  const salesProductOptions = salesForm.salesRep
+    ? Array.from(salesProductsByRep[salesForm.salesRep] || [])
+    : allSalesProductOptions;
+  const transferRepOptions = Array.from(new Set([
+    ...repUsers.map((user) => user?.displayName).filter(Boolean),
+    ...(repSubStores?.items || []).map((item) => item?.repName).filter(Boolean)
+  ]));
+  const transferProductOptions = Array.from(new Set((finalProductStore?.items || []).map((item) => item?.productName).filter(Boolean)));
   const activeManagerCustodyAvailable = Array.isArray(finManagerCustody?.items)
     ? finManagerCustody.items
       .filter((item) => item?.status === 'نشطة')
@@ -3285,6 +3390,8 @@ function MainApp({ auth, onLogout }) {
     : false;
   const rawPurchasesAddBlockedReason = 'لا يمكن إضافة فاتورة شراء بدون عهدة مدير مالي نشطة وبرصيد متاح.';
   const machinePurchasesAddBlockedReason = 'لا يمكن إضافة عملية صيانة بدون عهدة مدير مالي نشطة وبرصيد متاح.';
+  const miscPurchasesAddBlockedReason = 'لا يمكن إضافة مصروف نثري بدون عهدة مدير مالي نشطة وبرصيد متاح.';
+  const payrollAddBlockedReason = 'لا يمكن إضافة راتب أو سلفة بدون عهدة مدير مالي نشطة وبرصيد متاح.';
 
   function handleFmcSubmitLimited(event) {
     const isAllowedAdmin = adminEmployeeOptionsWithFallback.some((user) => user.displayName === fmcForm.employeeName);
@@ -3332,10 +3439,18 @@ function MainApp({ auth, onLogout }) {
               <span className="notification-count">{notificationsCount > 99 ? '99+' : notificationsCount}</span>
             ) : null}
           </button>
+
+          <button type="button" className="menu-toggle" onClick={() => setIsMobileMenuOpen(true)} aria-label="فتح القائمة">
+            ☰
+          </button>
         </div>
       </header>
 
-      <aside className="sidebar card">
+      {isMobileMenuOpen && (
+        <div className="mobile-overlay" onClick={() => setIsMobileMenuOpen(false)} aria-hidden="true" />
+      )}
+
+      <aside className={`sidebar card ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
         <nav className="sidebar-nav">
           {groupedNavigation.map((group) => {
             const isOpen = expandedNavGroups[group.id] !== false;
@@ -3389,6 +3504,10 @@ function MainApp({ auth, onLogout }) {
           <RolesPage token={auth.token} />
         ) : null}
 
+        {activeView === 'reps-management' && (auth.user.role === 'admin' || auth.user.role === 'manager') ? (
+          <RepsPage token={auth.token} />
+        ) : null}
+
         {!loading && activeView === 'dashboard' ? (
           <DashboardView dashboard={dashboard} onNavigate={navigateTo} activeView={activeView} />
         ) : null}
@@ -3397,6 +3516,9 @@ function MainApp({ auth, onLogout }) {
           <SalesView
             sales={sales}
             form={salesForm}
+            salesRepOptions={salesRepOptions}
+            salesProductOptions={transferProductOptions}
+            customerOptions={customerOptions}
             editingId={salesEditingId}
             saving={salesSaving}
             isFormOpen={salesFormOpen}
@@ -3836,26 +3958,26 @@ function MainApp({ auth, onLogout }) {
           <Modal isOpen={transferFormOpen} onClose={() => setTransferFormOpen(false)} title="نقل من مخزن المنتج النهائي إلى مندوب">
             <form className="form-grid" onSubmit={handleTransferSubmit}>
               <label><span>اسم المندوب</span>
-                {repUsers.length > 0 ? (
-                  <select value={transferForm.repName} onChange={e => setTransferForm(f => ({...f, repName: e.target.value}))} required>
-                    <option value="">— اختر مندوباً —</option>
-                    {repUsers.map(u => <option key={u.id} value={u.displayName}>{u.displayName}{u.code ? ` (${u.code})` : ''}</option>)}
-                  </select>
-                ) : (
-                  <input value={transferForm.repName} onChange={e => setTransferForm(f => ({...f, repName: e.target.value}))} required placeholder="اسم المندوب" />
-                )}
+                <select value={transferForm.repName} onChange={e => setTransferForm(f => ({...f, repName: e.target.value}))} required>
+                  <option value="">{transferRepOptions.length > 0 ? '— اختر مندوباً —' : 'لا توجد أسماء مناديب متاحة'}</option>
+                  {transferRepOptions.map((repName) => (
+                    <option key={repName} value={repName}>{repName}</option>
+                  ))}
+                  {transferForm.repName && !transferRepOptions.includes(transferForm.repName) ? (
+                    <option value={transferForm.repName}>{transferForm.repName}</option>
+                  ) : null}
+                </select>
               </label>
               <label><span>المنتج</span>
-                {finalProductStore.items.length > 0 ? (
-                  <select value={transferForm.productName} onChange={e => setTransferForm(f => ({...f, productName: e.target.value}))} required>
-                    <option value="">— اختر منتجاً —</option>
-                    {finalProductStore.items.map(p => (
-                      <option key={p.id} value={p.productName}>{p.productName} (متاح: {p.quantity} {p.unit})</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input value={transferForm.productName} onChange={e => setTransferForm(f => ({...f, productName: e.target.value}))} required placeholder="اسم المنتج" />
-                )}
+                <select value={transferForm.productName} onChange={e => setTransferForm(f => ({...f, productName: e.target.value}))} required>
+                  <option value="">{transferProductOptions.length > 0 ? '— اختر منتجاً —' : 'لا توجد منتجات متاحة في المخزن النهائي'}</option>
+                  {finalProductStore.items.map((p) => (
+                    <option key={p.id} value={p.productName}>{p.productName} (متاح: {p.quantity} {p.unit})</option>
+                  ))}
+                  {transferForm.productName && !transferProductOptions.includes(transferForm.productName) ? (
+                    <option value={transferForm.productName}>{transferForm.productName}</option>
+                  ) : null}
+                </select>
               </label>
               <label><span>الكمية المنقولة</span><input type="number" min="1" value={transferForm.quantity} onChange={e => setTransferForm(f => ({...f, quantity: e.target.value}))} required /></label>
               <label><span>تاريخ التسليم</span><input type="date" value={transferForm.deliveryDate} onChange={e => setTransferForm(f => ({...f, deliveryDate: e.target.value}))} /></label>
@@ -4255,9 +4377,36 @@ function MainApp({ auth, onLogout }) {
             editingId={mscEditingId}
             saving={mscSaving}
             isFormOpen={mscFormOpen}
-            onOpenForm={mscCrud.openForm}
+            formError={mscFormOpen ? error : ''}
+            onOpenForm={() => {
+              if (!hasActiveManagerCustodyBalance) {
+                setError(miscPurchasesAddBlockedReason);
+                return;
+              }
+              setError('');
+              mscCrud.openForm();
+            }}
             onCloseForm={mscCrud.closeForm}
             onSubmit={mscCrud.handleSubmit}
+            addDisabled={!hasActiveManagerCustodyBalance}
+            addDisabledTitle={miscPurchasesAddBlockedReason}
+            addDisabledHint={!hasActiveManagerCustodyBalance ? (
+              <>
+                {miscPurchasesAddBlockedReason}{' '}
+                <button
+                  type="button"
+                  className="inline-link-button"
+                  onClick={() => navigateTo('financial-manager-custody')}
+                >
+                  إضافة عهدة
+                </button>
+              </>
+            ) : ''}
+            extraActions={(
+              <span className={`status-chip ${hasActiveManagerCustodyBalance ? 'success' : 'warning'}`}>
+                الرصيد المتاح: {formatMoney(activeManagerCustodyAvailable)}
+              </span>
+            )}
             onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
@@ -4299,9 +4448,36 @@ function MainApp({ auth, onLogout }) {
             editingId={payEditingId}
             saving={paySaving}
             isFormOpen={payFormOpen}
-            onOpenForm={payCrud.openForm}
+            formError={payFormOpen ? error : ''}
+            onOpenForm={() => {
+              if (!hasActiveManagerCustodyBalance) {
+                setError(payrollAddBlockedReason);
+                return;
+              }
+              setError('');
+              payCrud.openForm();
+            }}
             onCloseForm={payCrud.closeForm}
             onSubmit={payCrud.handleSubmit}
+            addDisabled={!hasActiveManagerCustodyBalance}
+            addDisabledTitle={payrollAddBlockedReason}
+            addDisabledHint={!hasActiveManagerCustodyBalance ? (
+              <>
+                {payrollAddBlockedReason}{' '}
+                <button
+                  type="button"
+                  className="inline-link-button"
+                  onClick={() => navigateTo('financial-manager-custody')}
+                >
+                  إضافة عهدة
+                </button>
+              </>
+            ) : ''}
+            extraActions={(
+              <span className={`status-chip ${hasActiveManagerCustodyBalance ? 'success' : 'warning'}`}>
+                الرصيد المتاح: {formatMoney(activeManagerCustodyAvailable)}
+              </span>
+            )}
             onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">

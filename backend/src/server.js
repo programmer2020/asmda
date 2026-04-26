@@ -115,6 +115,14 @@ function adminOnly(req, res, next) {
   next();
 }
 
+function managerOrAdmin(req, res, next) {
+  if (!['admin', 'manager'].includes(req.user?.role)) {
+    res.status(403).json({ message: 'هذا الإجراء متاح للمدير أو مدير النظام فقط.' });
+    return;
+  }
+  next();
+}
+
 const app = express();
 const port = Number(process.env.PORT ?? 5000);
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
@@ -238,6 +246,10 @@ app.post('/api/sales', async (request, response) => {
     const created = await createSalesRecord(request.body);
     response.status(201).json(created);
   } catch (err) {
+    if (err.message && (err.message.includes('مخازن المناديب') || err.message.includes('المندوب') || err.message.includes('المنتج المختار'))) {
+      response.status(400).json({ message: err.message });
+      return;
+    }
     response.status(500).json({ message: err.message });
   }
 });
@@ -260,6 +272,10 @@ app.put('/api/sales/:id', async (request, response) => {
 
     response.json(updated);
   } catch (err) {
+    if (err.message && (err.message.includes('مخازن المناديب') || err.message.includes('المندوب') || err.message.includes('المنتج المختار'))) {
+      response.status(400).json({ message: err.message });
+      return;
+    }
     response.status(500).json({ message: err.message });
   }
 });
@@ -921,6 +937,69 @@ app.get('/api/users', authMiddleware, adminOnly, (_req, res) => {
 app.get('/api/users/by-role/:role', authMiddleware, (req, res) => {
   const users = getAllUsers().filter(u => u.role === req.params.role);
   res.json(users);
+});
+
+// ── Reps Management (manager/admin) ──
+app.get('/api/reps', authMiddleware, managerOrAdmin, (_req, res) => {
+  const reps = getAllUsers()
+    .filter((u) => u.role === 'sales')
+    .map(({ id, username, displayName, code, role }) => ({ id, username, displayName, code: code || '', role }));
+  res.json(reps);
+});
+
+app.post('/api/reps', authMiddleware, managerOrAdmin, (req, res) => {
+  const { username, password, displayName, code } = req.body ?? {};
+  if (!username || !password || !displayName) {
+    res.status(400).json({ message: 'يرجى إدخال اسم المستخدم وكلمة المرور والاسم الظاهر.' });
+    return;
+  }
+  try {
+    const created = createUser({ username, password, displayName, code: code || '', role: 'sales' });
+    res.status(201).json(created);
+  } catch (e) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+app.put('/api/reps/:id', authMiddleware, managerOrAdmin, (req, res) => {
+  const target = getUserById(req.params.id);
+  if (!target || target.role !== 'sales') {
+    res.status(404).json({ message: 'المندوب غير موجود.' });
+    return;
+  }
+
+  const { displayName, code, password } = req.body ?? {};
+  if (!displayName) {
+    res.status(400).json({ message: 'يرجى إدخال الاسم الظاهر.' });
+    return;
+  }
+
+  try {
+    const updated = updateUser(req.params.id, {
+      displayName,
+      code: code || '',
+      role: 'sales',
+      ...(password ? { password } : {})
+    });
+    res.json(updated);
+  } catch (e) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+app.delete('/api/reps/:id', authMiddleware, managerOrAdmin, (req, res) => {
+  const target = getUserById(req.params.id);
+  if (!target || target.role !== 'sales') {
+    res.status(404).json({ message: 'المندوب غير موجود.' });
+    return;
+  }
+
+  try {
+    deleteUser(req.params.id);
+    res.status(204).send();
+  } catch (e) {
+    res.status(400).json({ message: e.message });
+  }
 });
 
 app.post('/api/users', authMiddleware, adminOnly, (req, res) => {

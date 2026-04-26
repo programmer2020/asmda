@@ -221,8 +221,29 @@ export async function getCreditSalesData() {
   };
 }
 
+async function ensureRepStoreSalesLink(repName, productName) {
+  const rep = String(repName || '').trim();
+  const product = String(productName || '').trim();
+  if (!rep || !product) {
+    throw new Error('يرجى اختيار المندوب والمنتج من مخازن المناديب.');
+  }
+
+  const linkResult = await query(
+    `SELECT id FROM rep_sub_stores
+     WHERE LOWER(rep_name) = LOWER($1)
+       AND LOWER(product_name) = LOWER($2)
+     LIMIT 1`,
+    [rep, product]
+  );
+
+  if (linkResult.rows.length === 0) {
+    throw new Error('المنتج المختار غير مرتبط بالمندوب في مخازن المناديب.');
+  }
+}
+
 export async function createSalesRecord(payload) {
   const id = await nextId('SAL', 'direct_sales');
+  await ensureRepStoreSalesLink(payload.salesRep, payload.productName);
   
   const text = `
     INSERT INTO direct_sales 
@@ -245,6 +266,7 @@ export async function createSalesRecord(payload) {
 }
 
 export async function updateSalesRecord(id, payload) {
+  await ensureRepStoreSalesLink(payload.salesRep, payload.productName);
   const text = `
     UPDATE direct_sales SET 
       customer_name = COALESCE($2, customer_name),
@@ -1414,8 +1436,10 @@ export async function getMiscPurchasesData() {
 
 export async function createMiscPurchaseRecord(payload) {
   const id = await nextId('MSC', 'misc_purchases');
+  const amount = Number(payload.amount || 0);
+  await consumeFromManagerCustody(amount);
   const text = `INSERT INTO misc_purchases (id, description, amount, category, purchase_date, receipt_number, notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`;
-  const values = [id, payload.description||'', Number(payload.amount||0), payload.category||'', payload.purchaseDate||null, payload.receiptNumber||'', payload.notes||''];
+  const values = [id, payload.description||'', amount, payload.category||'', payload.purchaseDate||null, payload.receiptNumber||'', payload.notes||''];
   const result = await query(text, values);
   return mapMiscPurchase(result.rows[0]);
 }
@@ -1463,8 +1487,10 @@ export async function getPayrollAdvancesData() {
 
 export async function createPayrollAdvanceRecord(payload) {
   const id = await nextId('PAY', 'payroll_advances');
+  const amount = Number(payload.amount || 0);
+  await consumeFromManagerCustody(amount);
   const text = `INSERT INTO payroll_advances (id, employee_name, type, amount, month, status, notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`;
-  const values = [id, payload.employeeName||'', payload.type||'راتب', Number(payload.amount||0), payload.month||'', payload.status||'معلق', payload.notes||''];
+  const values = [id, payload.employeeName||'', payload.type||'راتب', amount, payload.month||'', payload.status||'معلق', payload.notes||''];
   const result = await query(text, values);
   return mapPayrollAdvance(result.rows[0]);
 }
