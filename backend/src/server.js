@@ -741,11 +741,13 @@ app.delete('/api/financial-manager-custody/:id', async (req, res) => { try { con
 app.get('/api/raw-materials-purchases', async (_req, res) => { try { res.json(await getRawMaterialsPurchasesData()); } catch (e) { res.status(500).json({ message: e.message }); } });
 app.post('/api/raw-materials-purchases', async (req, res) => {
   if (!req.body.supplierName || !req.body.materialName) { res.status(400).json({ message: 'يرجى إدخال اسم المورد واسم الخامة.' }); return; }
+  if (!req.body.purchaseDate || !String(req.body.invoiceNumber || '').trim()) { res.status(400).json({ message: 'تاريخ الشراء ورقم الفاتورة مطلوبان.' }); return; }
   if (Number(req.body.quantity) <= 0 || Number(req.body.unitPrice) <= 0) { res.status(400).json({ message: 'الكمية وسعر الوحدة يجب أن يكونا أكبر من صفر.' }); return; }
   try { res.status(201).json(await createRawPurchaseRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
 });
 app.put('/api/raw-materials-purchases/:id', async (req, res) => {
   if (!req.body.supplierName || !req.body.materialName) { res.status(400).json({ message: 'يرجى إدخال اسم المورد واسم الخامة.' }); return; }
+  if (!req.body.purchaseDate || !String(req.body.invoiceNumber || '').trim()) { res.status(400).json({ message: 'تاريخ الشراء ورقم الفاتورة مطلوبان.' }); return; }
   try { const u = await updateRawPurchaseRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
 });
 app.delete('/api/raw-materials-purchases/:id', async (req, res) => { try { const d = await deleteRawPurchaseRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });

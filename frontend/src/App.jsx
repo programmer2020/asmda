@@ -841,7 +841,7 @@ function getCheckStatusTone(status) {
   return 'warning';
 }
 
-function Modal({ isOpen, onClose, title, children }) {
+function Modal({ isOpen, onClose, title, children, errorMessage = '' }) {
   if (!isOpen) return null;
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -854,6 +854,7 @@ function Modal({ isOpen, onClose, title, children }) {
             <h3>{title}</h3>
           </div>
         </div>
+        {errorMessage ? <section className="notice error" style={{ marginBottom: '16px' }}>{errorMessage}</section> : null}
         {children}
       </div>
     </div>
@@ -917,7 +918,7 @@ function PlaceholderModuleView({ title, description }) {
   );
 }
 
-function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, renderRow, form, editingId, saving, isFormOpen, onOpenForm, onCloseForm, onSubmit, formTitle, formFields, onBack, extraActions }) {
+function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, renderRow, form, editingId, saving, isFormOpen, onOpenForm, onCloseForm, onSubmit, formTitle, formFields, onBack, extraActions, addDisabled = false, addDisabledHint = '', addDisabledTitle = '', formError = '' }) {
   return (
     <>
       <SummaryCards items={data.overview} />
@@ -930,7 +931,8 @@ function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, render
             </div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               {extraActions}
-              <button type="button" className="primary-button" onClick={onOpenForm}>{addLabel}</button>
+              {addDisabled && addDisabledHint ? <span style={{ color: 'var(--muted)', fontSize: '0.86rem' }}>{addDisabledHint}</span> : null}
+              <button type="button" className="primary-button" onClick={onOpenForm} disabled={addDisabled} title={addDisabled ? addDisabledTitle : undefined}>{addLabel}</button>
               {onBack && (
                 <button type="button" className="ghost-button" onClick={onBack}>
                   <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{ marginInlineEnd: '4px' }}><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -945,7 +947,7 @@ function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, render
           </div>
         </article>
       </section>
-      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? `تعديل ${formTitle}` : `إضافة ${formTitle}`}>
+      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? `تعديل ${formTitle}` : `إضافة ${formTitle}`} errorMessage={formError}>
         <form className="form-grid" onSubmit={onSubmit}>
           {formFields}
           <div className="form-actions full-width" style={{ marginTop: '16px' }}>
@@ -1644,7 +1646,7 @@ function PriceListView({
 }
 
 
-function CustodiesView({ custodies, onManageTransactions }) {
+function CustodiesView({ custodies, onManageTransactions, onDelete, canDelete = false }) {
   return (
     <>
       <SummaryCards items={custodies.overview} />
@@ -1682,6 +1684,11 @@ function CustodiesView({ custodies, onManageTransactions }) {
                     <button type="button" className="ghost-button small" onClick={() => onManageTransactions(item.id)}>
                       تعليقات وملاحظات
                     </button>
+                    {canDelete ? (
+                      <button type="button" className="danger-button small" onClick={() => onDelete(item.id)}>
+                        حذف
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </article>
@@ -2036,6 +2043,12 @@ function MainApp({ auth, onLogout }) {
     const t = setTimeout(() => setNotice(''), 5000);
     return () => clearTimeout(t);
   }, [notice]);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(''), 5000);
+    return () => clearTimeout(t);
+  }, [error]);
 
   useEffect(() => {
     if (!auth?.token) {
@@ -2864,7 +2877,7 @@ function MainApp({ auth, onLogout }) {
     'rss', 'السجل');
 
   const fmcCrud = makeModuleCrud('/financial-manager-custody', setFinManagerCustody, fmcForm, setFmcForm, initialFinManagerCustodyForm, fmcEditingId, setFmcEditingId, fmcSaving, setFmcSaving, fmcFormOpen, setFmcFormOpen,
-    f => ({ ...f, employeeName: auth?.user?.displayName || '', amount: Number(f.amount||0) }),
+    f => ({ ...f, amount: Number(f.amount||0) }),
     i => ({ employeeName: i.employeeName, amount: String(i.amount), purpose: i.purpose, custodyDate: i.custodyDate||'', status: i.status, notes: i.notes||'' }),
     'fmc', 'العهدة',
     async () => { const r = await fetch('/api/custodies'); if (r.ok) setCustodies(await r.json()); });
@@ -3149,6 +3162,12 @@ function MainApp({ auth, onLogout }) {
     : auth?.user?.displayName
       ? [{ id: auth.user.id ?? 'current-user', displayName: auth.user.displayName, code: auth.user.code ?? '', role: auth.user.role }]
       : [];
+  const adminEmployeeOptions = availableEmployeeUsers.filter((user) => user.role === 'admin');
+  const adminEmployeeOptionsWithFallback = adminEmployeeOptions.length > 0
+    ? adminEmployeeOptions
+    : auth?.user?.role === 'admin' && auth?.user?.displayName
+      ? [{ id: auth.user.id ?? 'current-user', displayName: auth.user.displayName, code: auth.user.code ?? '', role: auth.user.role }]
+      : [];
   const materialNameOptions = Array.isArray(rawMaterialsCatalog?.items)
     ? rawMaterialsCatalog.items.map((item) => item?.name).filter(Boolean)
     : [];
@@ -3158,6 +3177,25 @@ function MainApp({ auth, onLogout }) {
   const supplierNameOptions = Array.isArray(suppliers?.items)
     ? suppliers.items.map((item) => item?.name).filter(Boolean)
     : [];
+  const activeManagerCustodyAvailable = Array.isArray(finManagerCustody?.items)
+    ? finManagerCustody.items
+      .filter((item) => item?.status === 'نشطة')
+      .reduce((sum, item) => sum + Number(item?.amount ?? 0), 0)
+    : 0;
+  const hasActiveManagerCustodyBalance = Array.isArray(finManagerCustody?.items)
+    ? finManagerCustody.items.some((item) => item?.status === 'نشطة' && Number(item?.amount ?? 0) > 0)
+    : false;
+  const rawPurchasesAddBlockedReason = 'لا يمكن إضافة فاتورة شراء بدون عهدة مدير مالي نشطة وبرصيد متاح.';
+
+  function handleFmcSubmitLimited(event) {
+    const isAllowedAdmin = adminEmployeeOptionsWithFallback.some((user) => user.displayName === fmcForm.employeeName);
+    if (!isAllowedAdmin) {
+      event.preventDefault();
+      setError('يمكن اختيار مستخدم بدور admin فقط في عهدة المدير المالي.');
+      return;
+    }
+    fmcCrud.handleSubmit(event);
+  }
 
   return (
     <div className="app-shell" dir="rtl">
@@ -3232,11 +3270,11 @@ function MainApp({ auth, onLogout }) {
           <RolesPage token={auth.token} />
         ) : null}
 
-        {!loading && !error && activeView === 'dashboard' ? (
+        {!loading && activeView === 'dashboard' ? (
           <DashboardView dashboard={dashboard} onNavigate={navigateTo} activeView={activeView} />
         ) : null}
 
-        {!loading && !error && activeView === 'sales' ? (
+        {!loading && activeView === 'sales' ? (
           <SalesView
             sales={sales}
             form={salesForm}
@@ -3252,7 +3290,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'credit-sales' ? (
+        {!loading && activeView === 'credit-sales' ? (
           <CreditSalesView
             creditSales={creditSales}
             form={creditForm}
@@ -3268,7 +3306,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'returns' ? (
+        {!loading && activeView === 'returns' ? (
           <ReturnsView
             returns={returns}
             form={returnsForm}
@@ -3284,7 +3322,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'price-list' ? (
+        {!loading && activeView === 'price-list' ? (
           <PriceListView
             priceList={priceList}
             form={priceListForm}
@@ -3300,14 +3338,16 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'custodies' ? (
+        {!loading && activeView === 'custodies' ? (
           <CustodiesView
             custodies={custodies}
             onManageTransactions={openCustodyTransactions}
+            onDelete={requestCustodyDelete}
+            canDelete={isAdmin}
           />
         ) : null}
 
-        {!loading && !error && activeView === 'statement' ? (
+        {!loading && activeView === 'statement' ? (
           <StatementView
             statement={statement}
             customers={customerOptions}
@@ -3316,7 +3356,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'checks' ? (
+        {!loading && activeView === 'checks' ? (
           <ChecksView
             checks={checks}
             form={checkForm}
@@ -3332,7 +3372,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'notifications' ? (() => {
+        {!loading && activeView === 'notifications' ? (() => {
           const today = getTodayLocalDateKey();
           const todayChecks = checks.items.filter(i => i.collectionDate === today && i.status === 'معلق');
           const soonChecks = checks.items.filter(i => {
@@ -3417,7 +3457,7 @@ function MainApp({ auth, onLogout }) {
           );
         })() : null}
 
-        {!loading && !error && activeView === 'product-cards' ? (
+        {!loading && activeView === 'product-cards' ? (
           <GenericCrudView
             data={productCards}
             eyebrow="كبون الأصناف"
@@ -3485,7 +3525,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'final-product-store' ? (
+        {!loading && activeView === 'final-product-store' ? (
           <GenericCrudView
             data={finalProductStore}
             eyebrow="مخزن المنتج النهائي"
@@ -3553,7 +3593,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'raw-materials-packaging-store' ? (
+        {!loading && activeView === 'raw-materials-packaging-store' ? (
           <GenericCrudView
             data={rawMaterialsStore}
             eyebrow="مخزن الخامات والتعبئة"
@@ -3608,7 +3648,7 @@ function MainApp({ auth, onLogout }) {
                   {rmForm.materialName && !materialNameOptions.includes(rmForm.materialName) ? <option value={rmForm.materialName}>{rmForm.materialName}</option> : null}
                 </select>
               </label>
-              <label><span>التصنيف</span><input name="category" value={rmForm.category} readOnly /></label>
+              <label><span>التصنيف</span><input className="readonly-field" name="category" value={rmForm.category} readOnly /></label>
               <label><span>الكمية</span><input name="quantity" type="number" min="0" value={rmForm.quantity} onChange={rmCrud.handleInput} /></label>
               <label><span>الوحدة</span>
                 <select name="unit" value={rmForm.unit} onChange={rmCrud.handleInput}>
@@ -3623,7 +3663,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'rep-sub-stores' ? (
+        {!loading && activeView === 'rep-sub-stores' ? (
           <>
           <GenericCrudView
             data={repSubStores}
@@ -3723,7 +3763,7 @@ function MainApp({ auth, onLogout }) {
           </>
         ) : null}
 
-        {!loading && !error && activeView === 'financial-manager-custody' ? (
+        {!loading && activeView === 'financial-manager-custody' ? (
           <>
           <GenericCrudView
             data={finManagerCustody}
@@ -3746,7 +3786,6 @@ function MainApp({ auth, onLogout }) {
                   onChange={e => setFmcBudgetInput(e.target.value)}
                   style={{ width: '170px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
                 />
-                <button type="submit" className="ghost-button small">تعيين الميزانية</button>
               </form>
             }
             onOpenForm={() => {
@@ -3774,7 +3813,7 @@ function MainApp({ auth, onLogout }) {
               setFmcAssignOpen(false);
               fmcCrud.closeForm();
             }}
-            onSubmit={fmcCrud.handleSubmit}
+            onSubmit={handleFmcSubmitLimited}
             onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
@@ -3799,8 +3838,8 @@ function MainApp({ auth, onLogout }) {
               <>
                 <label><span>اسم الموظف</span>
                   <select name="employeeName" value={fmcForm.employeeName} onChange={fmcCrud.handleInput} required>
-                    <option value="">{employeeOptionsWithFallback.length > 0 ? '— اختر موظفًا —' : 'لا يوجد موظفون متاحون'}</option>
-                    {employeeOptionsWithFallback.map((user) => (
+                    <option value="">{adminEmployeeOptionsWithFallback.length > 0 ? '— اختر مديرًا —' : 'لا يوجد مستخدم admin متاح'}</option>
+                    {adminEmployeeOptionsWithFallback.map((user) => (
                       <option key={user.id ?? user.displayName} value={user.displayName}>
                         {user.displayName}{user.code ? ` (${user.code})` : ''}
                       </option>
@@ -3837,7 +3876,7 @@ function MainApp({ auth, onLogout }) {
           </>
         ) : null}
 
-        {!loading && !error && activeView === 'raw-materials-catalog' ? (
+        {!loading && activeView === 'raw-materials-catalog' ? (
           <GenericCrudView
             data={rawMaterialsCatalog}
             eyebrow="تسجيل الخامات"
@@ -3877,7 +3916,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'suppliers' ? (
+        {!loading && activeView === 'suppliers' ? (
           <GenericCrudView
             data={suppliers}
             eyebrow="تسجيل الموردين"
@@ -3915,7 +3954,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'raw-materials-purchases' ? (
+        {!loading && activeView === 'raw-materials-purchases' ? (
           <GenericCrudView
             data={rawPurchases}
             eyebrow="مشتريات الخامات"
@@ -3926,9 +3965,36 @@ function MainApp({ auth, onLogout }) {
             editingId={rmpEditingId}
             saving={rmpSaving}
             isFormOpen={rmpFormOpen}
-            onOpenForm={rmpCrud.openForm}
+            formError={rmpFormOpen ? error : ''}
+            onOpenForm={() => {
+              if (!hasActiveManagerCustodyBalance) {
+                setError(rawPurchasesAddBlockedReason);
+                return;
+              }
+              setError('');
+              rmpCrud.openForm();
+            }}
             onCloseForm={rmpCrud.closeForm}
             onSubmit={rmpCrud.handleSubmit}
+            addDisabled={!hasActiveManagerCustodyBalance}
+            addDisabledTitle={rawPurchasesAddBlockedReason}
+            addDisabledHint={!hasActiveManagerCustodyBalance ? (
+              <>
+                {rawPurchasesAddBlockedReason}{' '}
+                <button
+                  type="button"
+                  className="inline-link-button"
+                  onClick={() => navigateTo('financial-manager-custody')}
+                >
+                  إضافة عهدة
+                </button>
+              </>
+            ) : ''}
+            extraActions={(
+              <span className={`status-chip ${hasActiveManagerCustodyBalance ? 'success' : 'warning'}`}>
+                الرصيد المتاح: {formatMoney(activeManagerCustodyAvailable)}
+              </span>
+            )}
             onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
@@ -3970,14 +4036,14 @@ function MainApp({ auth, onLogout }) {
               </label>
               <label><span>الكمية</span><input name="quantity" type="number" min="0" step="0.01" value={rmpForm.quantity} onChange={rmpCrud.handleInput} required /></label>
               <label><span>سعر الوحدة</span><input name="unitPrice" type="number" min="0" step="0.01" value={rmpForm.unitPrice} onChange={rmpCrud.handleInput} required /></label>
-              <label><span>تاريخ الشراء</span><input name="purchaseDate" type="date" value={rmpForm.purchaseDate} onChange={rmpCrud.handleInput} /></label>
-              <label><span>رقم الفاتورة</span><input name="invoiceNumber" value={rmpForm.invoiceNumber} onChange={rmpCrud.handleInput} /></label>
+              <label><span>تاريخ الشراء</span><input name="purchaseDate" type="date" value={rmpForm.purchaseDate} onChange={rmpCrud.handleInput} required /></label>
+              <label><span>رقم الفاتورة</span><input name="invoiceNumber" value={rmpForm.invoiceNumber} onChange={rmpCrud.handleInput} required /></label>
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={rmpForm.notes} onChange={rmpCrud.handleInput} /></label>
             </>}
           />
         ) : null}
 
-        {!loading && !error && activeView === 'machine-maintenance-purchases' ? (
+        {!loading && activeView === 'machine-maintenance-purchases' ? (
           <GenericCrudView
             data={machinePurchases}
             eyebrow="مشتريات صيانة المكن"
@@ -4023,7 +4089,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'misc-purchases' ? (
+        {!loading && activeView === 'misc-purchases' ? (
           <GenericCrudView
             data={miscPurchases}
             eyebrow="المصروفات النثرية"
@@ -4067,7 +4133,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'payroll-advances' ? (
+        {!loading && activeView === 'payroll-advances' ? (
           <GenericCrudView
             data={payrollAdvances}
             eyebrow="الرواتب والسلف"
@@ -4112,7 +4178,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'customer-payment-alerts' ? (
+        {!loading && activeView === 'customer-payment-alerts' ? (
           <GenericCrudView
             data={paymentAlerts}
             eyebrow="تنبيهات الدفع"
@@ -4157,7 +4223,7 @@ function MainApp({ auth, onLogout }) {
           />
         ) : null}
 
-        {!loading && !error && activeView === 'free-samples' ? (
+        {!loading && activeView === 'free-samples' ? (
           <GenericCrudView
             data={freeSamples}
             eyebrow="العينات المجانية"
@@ -4261,4 +4327,5 @@ function MainApp({ auth, onLogout }) {
     </div>
   );
 }
+
 
