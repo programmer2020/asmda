@@ -435,6 +435,8 @@ const views = [
   'product-cards',
   'final-product-store',
   'raw-materials-packaging-store',
+  'raw-materials-catalog',
+  'suppliers',
   'rep-sub-stores',
   'financial-manager-custody',
   'raw-materials-purchases',
@@ -472,6 +474,16 @@ const navigation = [
     id: 'raw-materials-packaging-store',
     label: 'مخزن خامات وتعبئة وتغليف',
     helper: 'إدارة خامات التشغيل والتغليف'
+  },
+  {
+    id: 'raw-materials-catalog',
+    label: 'تسجيل الخامات',
+    helper: 'إدارة أسماء الخامات المستخدمة في الشراء'
+  },
+  {
+    id: 'suppliers',
+    label: 'تسجيل الموردين',
+    helper: 'إدارة أسماء الموردين المعتمدين'
   },
   {
     id: 'rep-sub-stores',
@@ -629,6 +641,8 @@ const initialRawMaterialsStore = { overview: [], items: [] };
 const initialRepSubStores = { overview: [], items: [] };
 const initialFinManagerCustody = { overview: [], items: [] };
 const initialRawPurchases = { overview: [], items: [] };
+const initialRawMaterialsCatalog = { overview: [], items: [] };
+const initialSuppliers = { overview: [], items: [] };
 const initialMachinePurchases = { overview: [], items: [] };
 const initialMiscPurchases = { overview: [], items: [] };
 const initialPayrollAdvances = { overview: [], items: [] };
@@ -640,6 +654,8 @@ const initialRawMaterialForm = { materialName: '', category: '', quantity: '', u
 const initialRepSubStoreForm = { repName: '', productName: '', quantity: '', deliveryDate: '', status: 'مسلّم', notes: '' };
 const initialFinManagerCustodyForm = { employeeName: '', amount: '', purpose: '', custodyDate: '', status: 'نشطة', notes: '' };
 const initialRawPurchaseForm = { supplierName: '', materialName: '', quantity: '', unitPrice: '', purchaseDate: '', invoiceNumber: '', notes: '' };
+const initialRawMaterialCatalogForm = { name: '', category: '', notes: '' };
+const initialSupplierForm = { name: '', notes: '' };
 const initialMachinePurchaseForm = { supplierName: '', description: '', amount: '', purchaseDate: '', machineName: '', invoiceNumber: '', notes: '' };
 const initialMiscPurchaseForm = { description: '', amount: '', category: '', purchaseDate: '', receiptNumber: '', notes: '' };
 const initialPayrollAdvanceForm = { employeeName: '', type: 'راتب', amount: '', month: '', status: 'معلق', notes: '' };
@@ -1915,6 +1931,8 @@ function MainApp({ auth, onLogout }) {
   const [repSubStores, setRepSubStores] = useState(initialRepSubStores);
   const [finManagerCustody, setFinManagerCustody] = useState(initialFinManagerCustody);
   const [rawPurchases, setRawPurchases] = useState(initialRawPurchases);
+  const [rawMaterialsCatalog, setRawMaterialsCatalog] = useState(initialRawMaterialsCatalog);
+  const [suppliers, setSuppliers] = useState(initialSuppliers);
   const [machinePurchases, setMachinePurchases] = useState(initialMachinePurchases);
   const [miscPurchases, setMiscPurchases] = useState(initialMiscPurchases);
   const [payrollAdvances, setPayrollAdvances] = useState(initialPayrollAdvances);
@@ -1927,6 +1945,8 @@ function MainApp({ auth, onLogout }) {
   const [fmcForm, setFmcForm] = useState(initialFinManagerCustodyForm);
   const [fmcAssignForm, setFmcAssignForm] = useState(initialFinManagerCustodyForm);
   const [rmpForm, setRmpForm] = useState(initialRawPurchaseForm);
+  const [rmcForm, setRmcForm] = useState(initialRawMaterialCatalogForm);
+  const [supForm, setSupForm] = useState(initialSupplierForm);
   const [mmpForm, setMmpForm] = useState(initialMachinePurchaseForm);
   const [mscForm, setMscForm] = useState(initialMiscPurchaseForm);
   const [payForm, setPayForm] = useState(initialPayrollAdvanceForm);
@@ -1938,6 +1958,8 @@ function MainApp({ auth, onLogout }) {
   const [rssEditingId, setRssEditingId] = useState('');
   const [fmcEditingId, setFmcEditingId] = useState('');
   const [rmpEditingId, setRmpEditingId] = useState('');
+  const [rmcEditingId, setRmcEditingId] = useState('');
+  const [supEditingId, setSupEditingId] = useState('');
   const [mmpEditingId, setMmpEditingId] = useState('');
   const [mscEditingId, setMscEditingId] = useState('');
   const [payEditingId, setPayEditingId] = useState('');
@@ -1949,6 +1971,8 @@ function MainApp({ auth, onLogout }) {
   const [rssSaving, setRssSaving] = useState(false);
   const [fmcSaving, setFmcSaving] = useState(false);
   const [rmpSaving, setRmpSaving] = useState(false);
+  const [rmcSaving, setRmcSaving] = useState(false);
+  const [supSaving, setSupSaving] = useState(false);
   const [mmpSaving, setMmpSaving] = useState(false);
   const [mscSaving, setMscSaving] = useState(false);
   const [paySaving, setPaySaving] = useState(false);
@@ -1972,6 +1996,8 @@ function MainApp({ auth, onLogout }) {
   const [fmcBudgetInput, setFmcBudgetInput] = useState('');
   const [activeManagerCustodyId, setActiveManagerCustodyId] = useState('');
   const [rmpFormOpen, setRmpFormOpen] = useState(false);
+  const [rmcFormOpen, setRmcFormOpen] = useState(false);
+  const [supFormOpen, setSupFormOpen] = useState(false);
   const [mmpFormOpen, setMmpFormOpen] = useState(false);
   const [mscFormOpen, setMscFormOpen] = useState(false);
   const [payFormOpen, setPayFormOpen] = useState(false);
@@ -2054,6 +2080,8 @@ function MainApp({ auth, onLogout }) {
         ['/api/rep-sub-stores', setRepSubStores],
         ['/api/financial-manager-custody', setFinManagerCustody],
         ['/api/raw-materials-purchases', setRawPurchases],
+        ['/api/raw-materials-catalog', setRawMaterialsCatalog],
+        ['/api/suppliers', setSuppliers],
         ['/api/machine-maintenance-purchases', setMachinePurchases],
         ['/api/misc-purchases', setMiscPurchases],
         ['/api/payroll-advances', setPayrollAdvances],
@@ -2816,7 +2844,17 @@ function MainApp({ auth, onLogout }) {
     'fp', 'المنتج');
 
   const rmCrud = makeModuleCrud('/raw-materials-store', setRawMaterialsStore, rmForm, setRmForm, initialRawMaterialForm, rmEditingId, setRmEditingId, rmSaving, setRmSaving, rmFormOpen, setRmFormOpen,
-    f => ({ ...f, quantity: Number(f.quantity||0), minStock: Number(f.minStock||0) }),
+    f => {
+      const matchedMaterial = Array.isArray(rawMaterialsCatalog?.items)
+        ? rawMaterialsCatalog.items.find((item) => item?.name === f.materialName)
+        : null;
+      return {
+        ...f,
+        category: matchedMaterial?.category ?? f.category,
+        quantity: Number(f.quantity||0),
+        minStock: Number(f.minStock||0)
+      };
+    },
     i => ({ materialName: i.materialName, category: i.category, quantity: String(i.quantity), unit: i.unit, minStock: String(i.minStock), status: i.status, notes: i.notes||'' }),
     'rm', 'الخامة');
 
@@ -2835,6 +2873,14 @@ function MainApp({ auth, onLogout }) {
     f => ({ ...f, quantity: Number(f.quantity||0), unitPrice: Number(f.unitPrice||0) }),
     i => ({ supplierName: i.supplierName, materialName: i.materialName, quantity: String(i.quantity), unitPrice: String(i.unitPrice), purchaseDate: i.purchaseDate||'', invoiceNumber: i.invoiceNumber, notes: i.notes||'' }),
     'rmp', 'الفاتورة');
+  const rmcCrud = makeModuleCrud('/raw-materials-catalog', setRawMaterialsCatalog, rmcForm, setRmcForm, initialRawMaterialCatalogForm, rmcEditingId, setRmcEditingId, rmcSaving, setRmcSaving, rmcFormOpen, setRmcFormOpen,
+    f => ({ ...f }),
+    i => ({ name: i.name, category: i.category || '', notes: i.notes || '' }),
+    'rmc', 'الخامة');
+  const supCrud = makeModuleCrud('/suppliers', setSuppliers, supForm, setSupForm, initialSupplierForm, supEditingId, setSupEditingId, supSaving, setSupSaving, supFormOpen, setSupFormOpen,
+    f => ({ ...f }),
+    i => ({ name: i.name, notes: i.notes || '' }),
+    'sup', 'المورد');
 
   const mmpCrud = makeModuleCrud('/machine-maintenance-purchases', setMachinePurchases, mmpForm, setMmpForm, initialMachinePurchaseForm, mmpEditingId, setMmpEditingId, mmpSaving, setMmpSaving, mmpFormOpen, setMmpFormOpen,
     f => ({ ...f, amount: Number(f.amount||0) }),
@@ -2964,6 +3010,8 @@ function MainApp({ auth, onLogout }) {
     else if (deleteTarget.type === 'rss') rssCrud.confirmDelete();
     else if (deleteTarget.type === 'fmc') fmcCrud.confirmDelete();
     else if (deleteTarget.type === 'rmp') rmpCrud.confirmDelete();
+    else if (deleteTarget.type === 'rmc') rmcCrud.confirmDelete();
+    else if (deleteTarget.type === 'sup') supCrud.confirmDelete();
     else if (deleteTarget.type === 'mmp') mmpCrud.confirmDelete();
     else if (deleteTarget.type === 'msc') mscCrud.confirmDelete();
     else if (deleteTarget.type === 'pay') payCrud.confirmDelete();
@@ -3078,6 +3126,8 @@ function MainApp({ auth, onLogout }) {
     rss: 'هل أنت متأكد من حذف هذا السجل؟ لا يمكن التراجع عن هذا الإجراء.',
     fmc: 'هل أنت متأكد من حذف هذه العهدة؟ لا يمكن التراجع عن هذا الإجراء.',
     rmp: 'هل أنت متأكد من حذف فاتورة المشتريات؟ لا يمكن التراجع عن هذا الإجراء.',
+    rmc: 'هل أنت متأكد من حذف هذه الخامة المسجلة؟',
+    sup: 'هل أنت متأكد من حذف هذا المورد؟',
     mmp: 'هل أنت متأكد من حذف عملية الصيانة؟ لا يمكن التراجع عن هذا الإجراء.',
     msc: 'هل أنت متأكد من حذف هذا المصروف؟ لا يمكن التراجع عن هذا الإجراء.',
     pay: 'هل أنت متأكد من حذف هذا السجل؟ لا يمكن التراجع عن هذا الإجراء.',
@@ -3099,6 +3149,15 @@ function MainApp({ auth, onLogout }) {
     : auth?.user?.displayName
       ? [{ id: auth.user.id ?? 'current-user', displayName: auth.user.displayName, code: auth.user.code ?? '', role: auth.user.role }]
       : [];
+  const materialNameOptions = Array.isArray(rawMaterialsCatalog?.items)
+    ? rawMaterialsCatalog.items.map((item) => item?.name).filter(Boolean)
+    : [];
+  const materialCategoryByName = Array.isArray(rawMaterialsCatalog?.items)
+    ? Object.fromEntries(rawMaterialsCatalog.items.filter((item) => item?.name).map((item) => [item.name, item.category || '']))
+    : {};
+  const supplierNameOptions = Array.isArray(suppliers?.items)
+    ? suppliers.items.map((item) => item?.name).filter(Boolean)
+    : [];
 
   return (
     <div className="app-shell" dir="rtl">
@@ -3528,8 +3587,28 @@ function MainApp({ auth, onLogout }) {
               </article>
             )}
             formFields={<>
-              <label><span>اسم الخامة</span><input name="materialName" value={rmForm.materialName} onChange={rmCrud.handleInput} required /></label>
-              <label><span>التصنيف</span><input name="category" value={rmForm.category} onChange={rmCrud.handleInput} /></label>
+              <label><span>اسم الخامة</span>
+                <select
+                  name="materialName"
+                  value={rmForm.materialName}
+                  onChange={(e) => {
+                    const selectedName = e.target.value;
+                    setRmForm((current) => ({
+                      ...current,
+                      materialName: selectedName,
+                      category: materialCategoryByName[selectedName] ?? ''
+                    }));
+                  }}
+                  required
+                >
+                  <option value="">{materialNameOptions.length > 0 ? '— اختر خامة —' : 'لا توجد خامات مسجلة'}</option>
+                  {materialNameOptions.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                  {rmForm.materialName && !materialNameOptions.includes(rmForm.materialName) ? <option value={rmForm.materialName}>{rmForm.materialName}</option> : null}
+                </select>
+              </label>
+              <label><span>التصنيف</span><input name="category" value={rmForm.category} readOnly /></label>
               <label><span>الكمية</span><input name="quantity" type="number" min="0" value={rmForm.quantity} onChange={rmCrud.handleInput} /></label>
               <label><span>الوحدة</span>
                 <select name="unit" value={rmForm.unit} onChange={rmCrud.handleInput}>
@@ -3758,6 +3837,84 @@ function MainApp({ auth, onLogout }) {
           </>
         ) : null}
 
+        {!loading && !error && activeView === 'raw-materials-catalog' ? (
+          <GenericCrudView
+            data={rawMaterialsCatalog}
+            eyebrow="تسجيل الخامات"
+            headline="إدارة قائمة الخامات المعتمدة"
+            addLabel="إضافة خامة"
+            emptyLabel="لا توجد خامات مسجلة بعد."
+            formTitle="خامة"
+            editingId={rmcEditingId}
+            saving={rmcSaving}
+            isFormOpen={rmcFormOpen}
+            onOpenForm={rmcCrud.openForm}
+            onCloseForm={rmcCrud.closeForm}
+            onSubmit={rmcCrud.handleSubmit}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.name}</strong>
+                    {item.category ? <span className="status-chip neutral">{item.category}</span> : null}
+                  </div>
+                  {item.notes ? <p>{item.notes}</p> : <p>—</p>}
+                </div>
+                <div className="table-side">
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => rmcCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => rmcCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم الخامة</span><input name="name" value={rmcForm.name} onChange={rmcCrud.handleInput} required /></label>
+              <label><span>التصنيف</span><input name="category" value={rmcForm.category} onChange={rmcCrud.handleInput} placeholder="مثال: تعبئة / خامات تشغيل" /></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={rmcForm.notes} onChange={rmcCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && !error && activeView === 'suppliers' ? (
+          <GenericCrudView
+            data={suppliers}
+            eyebrow="تسجيل الموردين"
+            headline="إدارة قائمة الموردين المعتمدين"
+            addLabel="إضافة مورد"
+            emptyLabel="لا يوجد موردون مسجلون بعد."
+            formTitle="مورد"
+            editingId={supEditingId}
+            saving={supSaving}
+            isFormOpen={supFormOpen}
+            onOpenForm={supCrud.openForm}
+            onCloseForm={supCrud.closeForm}
+            onSubmit={supCrud.handleSubmit}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.name}</strong>
+                  </div>
+                  {item.notes ? <p>{item.notes}</p> : <p>—</p>}
+                </div>
+                <div className="table-side">
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => supCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => supCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>اسم المورد</span><input name="name" value={supForm.name} onChange={supCrud.handleInput} required /></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={supForm.notes} onChange={supCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
         {!loading && !error && activeView === 'raw-materials-purchases' ? (
           <GenericCrudView
             data={rawPurchases}
@@ -3793,8 +3950,24 @@ function MainApp({ auth, onLogout }) {
               </article>
             )}
             formFields={<>
-              <label><span>اسم المورد</span><input name="supplierName" value={rmpForm.supplierName} onChange={rmpCrud.handleInput} required /></label>
-              <label><span>اسم الخامة</span><input name="materialName" value={rmpForm.materialName} onChange={rmpCrud.handleInput} required /></label>
+              <label><span>اسم المورد</span>
+                <select name="supplierName" value={rmpForm.supplierName} onChange={rmpCrud.handleInput} required>
+                  <option value="">{supplierNameOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}</option>
+                  {supplierNameOptions.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                  {rmpForm.supplierName && !supplierNameOptions.includes(rmpForm.supplierName) ? <option value={rmpForm.supplierName}>{rmpForm.supplierName}</option> : null}
+                </select>
+              </label>
+              <label><span>اسم الخامة</span>
+                <select name="materialName" value={rmpForm.materialName} onChange={rmpCrud.handleInput} required>
+                  <option value="">{materialNameOptions.length > 0 ? '— اختر خامة —' : 'لا توجد خامات مسجلة'}</option>
+                  {materialNameOptions.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                  {rmpForm.materialName && !materialNameOptions.includes(rmpForm.materialName) ? <option value={rmpForm.materialName}>{rmpForm.materialName}</option> : null}
+                </select>
+              </label>
               <label><span>الكمية</span><input name="quantity" type="number" min="0" step="0.01" value={rmpForm.quantity} onChange={rmpCrud.handleInput} required /></label>
               <label><span>سعر الوحدة</span><input name="unitPrice" type="number" min="0" step="0.01" value={rmpForm.unitPrice} onChange={rmpCrud.handleInput} required /></label>
               <label><span>تاريخ الشراء</span><input name="purchaseDate" type="date" value={rmpForm.purchaseDate} onChange={rmpCrud.handleInput} /></label>

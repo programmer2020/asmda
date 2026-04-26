@@ -55,6 +55,14 @@ import {
   createRawPurchaseRecord,
   updateRawPurchaseRecord,
   deleteRawPurchaseRecord,
+  getRawMaterialsCatalogData,
+  createRawMaterialsCatalogRecord,
+  updateRawMaterialsCatalogRecord,
+  deleteRawMaterialsCatalogRecord,
+  getSuppliersData,
+  createSupplierRecord,
+  updateSupplierRecord,
+  deleteSupplierRecord,
   getMachineMaintenancePurchasesData,
   createMachinePurchaseRecord,
   updateMachinePurchaseRecord,
@@ -741,6 +749,30 @@ app.put('/api/raw-materials-purchases/:id', async (req, res) => {
   try { const u = await updateRawPurchaseRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
 });
 app.delete('/api/raw-materials-purchases/:id', async (req, res) => { try { const d = await deleteRawPurchaseRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Raw Materials Catalog (Names) ─────────────────────────────────────────────
+app.get('/api/raw-materials-catalog', async (_req, res) => { try { res.json(await getRawMaterialsCatalogData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/raw-materials-catalog', async (req, res) => {
+  if (!req.body.name) { res.status(400).json({ message: 'يرجى إدخال اسم الخامة.' }); return; }
+  try { res.status(201).json(await createRawMaterialsCatalogRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/raw-materials-catalog/:id', async (req, res) => {
+  if (!req.body.name) { res.status(400).json({ message: 'يرجى إدخال اسم الخامة.' }); return; }
+  try { const u = await updateRawMaterialsCatalogRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'الخامة غير موجودة.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/raw-materials-catalog/:id', async (req, res) => { try { const d = await deleteRawMaterialsCatalogRecord(req.params.id); if (!d) { res.status(404).json({ message: 'الخامة غير موجودة.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+// ── Suppliers Catalog (Names) ─────────────────────────────────────────────────
+app.get('/api/suppliers', async (_req, res) => { try { res.json(await getSuppliersData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/suppliers', async (req, res) => {
+  if (!req.body.name) { res.status(400).json({ message: 'يرجى إدخال اسم المورد.' }); return; }
+  try { res.status(201).json(await createSupplierRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/suppliers/:id', async (req, res) => {
+  if (!req.body.name) { res.status(400).json({ message: 'يرجى إدخال اسم المورد.' }); return; }
+  try { const u = await updateSupplierRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'المورد غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/suppliers/:id', async (req, res) => { try { const d = await deleteSupplierRecord(req.params.id); if (!d) { res.status(404).json({ message: 'المورد غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
 
 // ── Machine Maintenance Purchases ────────────────────────────────────────────
 app.get('/api/machine-maintenance-purchases', async (_req, res) => { try { res.json(await getMachineMaintenancePurchasesData()); } catch (e) { res.status(500).json({ message: e.message }); } });

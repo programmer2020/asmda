@@ -1179,12 +1179,42 @@ export async function getRawMaterialsPurchasesData() {
   return { overview, items };
 }
 
+async function getActiveManagerCustodyRows() {
+  const result = await query(
+    "SELECT id, amount, status, created_at FROM financial_manager_custody WHERE status = 'نشطة' ORDER BY created_at ASC"
+  );
+  return (result.rows || []).filter((row) => row && row.status === 'نشطة');
+}
+
+async function consumeFromManagerCustody(requiredAmount) {
+  let remaining = Number(requiredAmount || 0);
+  if (remaining <= 0) return;
+
+  const activeRows = await getActiveManagerCustodyRows();
+  const available = activeRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  if (remaining > available) {
+    throw new Error(`رصيد عهدة المدير المالي غير كافٍ. المتاح حاليًا ${available.toFixed(2)} والمطلوب ${remaining.toFixed(2)}.`);
+  }
+
+  for (const row of activeRows) {
+    if (remaining <= 0) break;
+    const current = Number(row.amount || 0);
+    if (current <= 0) continue;
+    const consume = Math.min(current, remaining);
+    const nextAmount = current - consume;
+    await query('UPDATE financial_manager_custody SET amount = $2 WHERE id = $1 RETURNING id', [row.id, nextAmount]);
+    remaining -= consume;
+  }
+}
+
 export async function createRawPurchaseRecord(payload) {
   const id = await nextId('RMP', 'raw_materials_purchases');
   const qty = Number(payload.quantity||0);
   const up = Number(payload.unitPrice||0);
+  const total = qty * up;
+  await consumeFromManagerCustody(total);
   const text = `INSERT INTO raw_materials_purchases (id, supplier_name, material_name, quantity, unit_price, total_amount, purchase_date, invoice_number, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`;
-  const values = [id, payload.supplierName||'', payload.materialName||'', qty, up, qty*up, payload.purchaseDate||null, payload.invoiceNumber||'', payload.notes||''];
+  const values = [id, payload.supplierName||'', payload.materialName||'', qty, up, total, payload.purchaseDate||null, payload.invoiceNumber||'', payload.notes||''];
   const result = await query(text, values);
   return mapRawPurchase(result.rows[0]);
 }
@@ -1203,6 +1233,105 @@ export async function updateRawPurchaseRecord(id, payload) {
 export async function deleteRawPurchaseRecord(id) {
   const result = await query('DELETE FROM raw_materials_purchases WHERE id=$1 RETURNING id', [id]);
   return result.rowCount > 0;
+}
+
+// ── Raw Materials Catalog (Names) ─────────────────────────────────────────────
+
+let rawMaterialsCatalogStore = [];
+let suppliersCatalogStore = [];
+
+function nextCatalogId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+}
+
+function mapCatalogItem(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category || '',
+    notes: row.notes || ''
+  };
+}
+
+export async function getRawMaterialsCatalogData() {
+  const items = rawMaterialsCatalogStore.map(mapCatalogItem);
+  const overview = [
+    { id: 'rmc-count', label: 'عدد الخامات', value: items.length, type: 'number', helper: 'خامة مسجلة', tone: 'calm' }
+  ];
+  return { overview, items };
+}
+
+export async function createRawMaterialsCatalogRecord(payload) {
+  const name = String(payload.name || '').trim();
+  if (!name) throw new Error('يرجى إدخال اسم الخامة.');
+  const exists = rawMaterialsCatalogStore.some((item) => item.name.trim() === name);
+  if (exists) throw new Error('اسم الخامة مسجل بالفعل.');
+  const created = { id: nextCatalogId('RMC'), name, category: payload.category || '', notes: payload.notes || '' };
+  rawMaterialsCatalogStore.unshift(created);
+  return mapCatalogItem(created);
+}
+
+export async function updateRawMaterialsCatalogRecord(id, payload) {
+  const idx = rawMaterialsCatalogStore.findIndex((item) => item.id === id);
+  if (idx === -1) return null;
+  const nextName = payload.name !== undefined ? String(payload.name).trim() : rawMaterialsCatalogStore[idx].name;
+  if (!nextName) throw new Error('يرجى إدخال اسم الخامة.');
+  const duplicated = rawMaterialsCatalogStore.some((item) => item.id !== id && item.name.trim() === nextName);
+  if (duplicated) throw new Error('اسم الخامة مسجل بالفعل.');
+  rawMaterialsCatalogStore[idx] = {
+    ...rawMaterialsCatalogStore[idx],
+    name: nextName,
+    category: payload.category !== undefined ? payload.category : rawMaterialsCatalogStore[idx].category,
+    notes: payload.notes !== undefined ? payload.notes : rawMaterialsCatalogStore[idx].notes
+  };
+  return mapCatalogItem(rawMaterialsCatalogStore[idx]);
+}
+
+export async function deleteRawMaterialsCatalogRecord(id) {
+  const before = rawMaterialsCatalogStore.length;
+  rawMaterialsCatalogStore = rawMaterialsCatalogStore.filter((item) => item.id !== id);
+  return rawMaterialsCatalogStore.length < before;
+}
+
+// ── Suppliers Catalog (Names) ─────────────────────────────────────────────────
+
+export async function getSuppliersData() {
+  const items = suppliersCatalogStore.map(mapCatalogItem);
+  const overview = [
+    { id: 'sup-count', label: 'عدد الموردين', value: items.length, type: 'number', helper: 'مورد مسجل', tone: 'calm' }
+  ];
+  return { overview, items };
+}
+
+export async function createSupplierRecord(payload) {
+  const name = String(payload.name || '').trim();
+  if (!name) throw new Error('يرجى إدخال اسم المورد.');
+  const exists = suppliersCatalogStore.some((item) => item.name.trim() === name);
+  if (exists) throw new Error('اسم المورد مسجل بالفعل.');
+  const created = { id: nextCatalogId('SUP'), name, notes: payload.notes || '' };
+  suppliersCatalogStore.unshift(created);
+  return mapCatalogItem(created);
+}
+
+export async function updateSupplierRecord(id, payload) {
+  const idx = suppliersCatalogStore.findIndex((item) => item.id === id);
+  if (idx === -1) return null;
+  const nextName = payload.name !== undefined ? String(payload.name).trim() : suppliersCatalogStore[idx].name;
+  if (!nextName) throw new Error('يرجى إدخال اسم المورد.');
+  const duplicated = suppliersCatalogStore.some((item) => item.id !== id && item.name.trim() === nextName);
+  if (duplicated) throw new Error('اسم المورد مسجل بالفعل.');
+  suppliersCatalogStore[idx] = {
+    ...suppliersCatalogStore[idx],
+    name: nextName,
+    notes: payload.notes !== undefined ? payload.notes : suppliersCatalogStore[idx].notes
+  };
+  return mapCatalogItem(suppliersCatalogStore[idx]);
+}
+
+export async function deleteSupplierRecord(id) {
+  const before = suppliersCatalogStore.length;
+  suppliersCatalogStore = suppliersCatalogStore.filter((item) => item.id !== id);
+  return suppliersCatalogStore.length < before;
 }
 
 // ── Machine Maintenance Purchases ─────────────────────────────────────────────
