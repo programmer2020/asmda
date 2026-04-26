@@ -688,6 +688,9 @@ app.get('/api/financial-manager-custody', async (_req, res) => { try { res.json(
 app.post('/api/financial-manager-custody', async (req, res) => {
   if (!req.body.employeeName) { res.status(400).json({ message: 'يرجى إدخال اسم الموظف.' }); return; }
   if (Number(req.body.amount) <= 0) { res.status(400).json({ message: 'قيمة العهدة يجب أن تكون أكبر من صفر.' }); return; }
+  if (!req.body.purpose || !String(req.body.purpose).trim()) { res.status(400).json({ message: 'يرجى إدخال الغرض من العهدة.' }); return; }
+  if (!req.body.custodyDate) { res.status(400).json({ message: 'يرجى إدخال تاريخ العهدة.' }); return; }
+  if (!req.body.status || !String(req.body.status).trim()) { res.status(400).json({ message: 'يرجى اختيار حالة العهدة.' }); return; }
   try {
     const fmcRecord = await createFinManagerCustodyRecord(req.body);
     // إنشاء عهدة تلقائية للموظف في جدول العهد
@@ -733,6 +736,10 @@ app.post('/api/financial-manager-custody/:id/assign', async (req, res) => {
 });
 app.put('/api/financial-manager-custody/:id', async (req, res) => {
   if (!req.body.employeeName) { res.status(400).json({ message: 'يرجى إدخال اسم الموظف.' }); return; }
+  if (Number(req.body.amount) <= 0) { res.status(400).json({ message: 'قيمة العهدة يجب أن تكون أكبر من صفر.' }); return; }
+  if (!req.body.purpose || !String(req.body.purpose).trim()) { res.status(400).json({ message: 'يرجى إدخال الغرض من العهدة.' }); return; }
+  if (!req.body.custodyDate) { res.status(400).json({ message: 'يرجى إدخال تاريخ العهدة.' }); return; }
+  if (!req.body.status || !String(req.body.status).trim()) { res.status(400).json({ message: 'يرجى اختيار حالة العهدة.' }); return; }
   try { const u = await updateFinManagerCustodyRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
 });
 app.delete('/api/financial-manager-custody/:id', async (req, res) => { try { const d = await deleteFinManagerCustodyRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });

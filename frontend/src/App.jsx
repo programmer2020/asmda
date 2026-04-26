@@ -2444,7 +2444,7 @@ function MainApp({ auth, onLogout }) {
       const url = checkEditingId ? `/api/checks/${checkEditingId}` : '/api/checks';
       const method = checkEditingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      if (!res.ok) { throw new Error(await getApiErrorMessage(res, 'تعذر حفظ الشيك')); }
       const refreshed = await fetch('/api/checks'); if (refreshed.ok) setChecks(await refreshed.json());
       closeCheckForm();
       setNotice(checkEditingId ? 'تم تعديل الشيك بنجاح.' : 'تمت إضافة الشيك بنجاح.');
@@ -2505,7 +2505,7 @@ function MainApp({ auth, onLogout }) {
       const url = salesEditingId ? `/api/sales/${salesEditingId}` : '/api/sales';
       const method = salesEditingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      if (!res.ok) { throw new Error(await getApiErrorMessage(res, 'تعذر حفظ عملية البيع')); }
       const refreshed = await fetch('/api/sales'); if (refreshed.ok) setSales(await refreshed.json());
       closeSalesForm();
       setNotice(salesEditingId ? 'تم تعديل عملية البيع بنجاح.' : 'تمت إضافة عملية البيع بنجاح.');
@@ -2567,7 +2567,7 @@ function MainApp({ auth, onLogout }) {
       const url = creditEditingId ? `/api/credit-sales/${creditEditingId}` : '/api/credit-sales';
       const method = creditEditingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      if (!res.ok) { throw new Error(await getApiErrorMessage(res, 'تعذر حفظ سجل مبيعات الآجل')); }
       const refreshed = await fetch('/api/credit-sales'); if (refreshed.ok) setCreditSales(await refreshed.json());
       closeCreditForm();
       setNotice(creditEditingId ? 'تم تعديل سجل مبيعات الآجل بنجاح.' : 'تمت إضافة سجل مبيعات الآجل بنجاح.');
@@ -2629,7 +2629,7 @@ function MainApp({ auth, onLogout }) {
       const url = returnsEditingId ? `/api/returns/${returnsEditingId}` : '/api/returns';
       const method = returnsEditingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      if (!res.ok) { throw new Error(await getApiErrorMessage(res, 'تعذر حفظ المرتجع')); }
       const refreshed = await fetch('/api/returns'); if (refreshed.ok) setReturns(await refreshed.json());
       closeReturnsForm();
       setNotice(returnsEditingId ? 'تم تعديل المرتجع بنجاح.' : 'تمت إضافة المرتجع بنجاح.');
@@ -2688,7 +2688,7 @@ function MainApp({ auth, onLogout }) {
       const url = priceListEditingId ? `/api/price-list/${priceListEditingId}` : '/api/price-list';
       const method = priceListEditingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      if (!res.ok) { throw new Error(await getApiErrorMessage(res, 'تعذر حفظ المنتج')); }
       const refreshed = await fetch('/api/price-list'); if (refreshed.ok) setPriceList(await refreshed.json());
       closePriceListForm();
       setNotice(priceListEditingId ? 'تم تعديل المنتج بنجاح.' : 'تمت إضافة المنتج بنجاح.');
@@ -2752,7 +2752,7 @@ function MainApp({ auth, onLogout }) {
       const url = custodyEditingId ? `/api/custodies/${custodyEditingId}` : '/api/custodies';
       const method = custodyEditingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      if (!res.ok) { throw new Error(await getApiErrorMessage(res, 'تعذر حفظ العهدة')); }
       const refreshed = await fetch('/api/custodies'); if (refreshed.ok) setCustodies(await refreshed.json());
       closeCustodyForm();
       setNotice(custodyEditingId ? 'تم تعديل العهدة بنجاح.' : 'تمت إضافة العهدة بنجاح.');
@@ -2784,6 +2784,27 @@ function MainApp({ auth, onLogout }) {
     setTransactionForm(initialTransactionForm);
   }
 
+  async function getApiErrorMessage(response, fallbackMessage = 'تعذر تنفيذ الطلب') {
+    try {
+      const data = await response.json();
+      if (typeof data === 'string' && data.trim()) return data.trim();
+      if (data && typeof data === 'object') {
+        if (typeof data.message === 'string' && data.message.trim()) return data.message.trim();
+        if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
+        if (typeof data.detail === 'string' && data.detail.trim()) return data.detail.trim();
+      }
+    } catch {
+      // Response might not be JSON, fallback to text.
+    }
+    try {
+      const text = await response.text();
+      if (text && text.trim()) return text.trim();
+    } catch {
+      // Ignore read failures and return fallback.
+    }
+    return `${fallbackMessage}. (${response.status})`;
+  }
+
   function closeTransactionsModal() {
     setTransactionsModalOpen(false);
     setActiveCustodyId(null);
@@ -2801,7 +2822,7 @@ function MainApp({ auth, onLogout }) {
       setTransactionSaving(true); setError(''); setNotice('');
       const payload = { ...transactionForm, amount: Number(transactionForm.amount) };
       const res = await fetch(`/api/custodies/${activeCustodyId}/transactions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+      if (!res.ok) { throw new Error(await getApiErrorMessage(res, 'تعذر تسجيل الحركة')); }
       const txRes = await fetch(`/api/custodies/${activeCustodyId}/transactions`);
       if (txRes.ok) setActiveCustodyTransactions(await txRes.json());
       const custRes = await fetch('/api/custodies'); if (custRes.ok) setCustodies(await custRes.json());
@@ -2828,7 +2849,10 @@ function MainApp({ auth, onLogout }) {
         const url = editingId ? `/api${apiPath}/${editingId}` : `/api${apiPath}`;
         const method = editingId ? 'PUT' : 'POST';
         const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الخادم'); }
+        if (!res.ok) {
+          const message = await getApiErrorMessage(res, 'تعذر تنفيذ الطلب');
+          throw new Error(message);
+        }
         const refreshed = await fetch(`/api${apiPath}`);
         if (refreshed.ok) setData(await refreshed.json());
         if (afterSave) await afterSave();
@@ -2842,7 +2866,10 @@ function MainApp({ auth, onLogout }) {
       try {
         setError(''); setNotice('');
         const res = await fetch(`/api${apiPath}/${id}`, { method: 'DELETE' });
-        if (!res.ok && res.status !== 404) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'خطأ في الحذف'); }
+        if (!res.ok && res.status !== 404) {
+          const message = await getApiErrorMessage(res, 'خطأ في الحذف');
+          throw new Error(message);
+        }
         const refreshed = await fetch(`/api${apiPath}`);
         if (refreshed.ok) setData(await refreshed.json());
         setNotice(`تم حذف ${entityLabel} بنجاح.`);
@@ -2969,6 +2996,18 @@ function MainApp({ auth, onLogout }) {
     });
     loadEmployeeUsers();
     setFmcAssignOpen(true);
+  }
+
+  function openFmcEditForm(managerRecord) {
+    if (auth?.user?.role !== 'manager' && auth?.user?.role !== 'admin') {
+      setError('تعديل عهدة المدير متاح للمدير فقط.');
+      return;
+    }
+    loadEmployeeUsers();
+    setFmcAssignOpen(false);
+    setActiveManagerCustodyId('');
+    setError('');
+    fmcCrud.startEdit(managerRecord);
   }
 
   async function handleFmcAssignSubmit(e) {
@@ -3186,6 +3225,7 @@ function MainApp({ auth, onLogout }) {
     ? finManagerCustody.items.some((item) => item?.status === 'نشطة' && Number(item?.amount ?? 0) > 0)
     : false;
   const rawPurchasesAddBlockedReason = 'لا يمكن إضافة فاتورة شراء بدون عهدة مدير مالي نشطة وبرصيد متاح.';
+  const machinePurchasesAddBlockedReason = 'لا يمكن إضافة عملية صيانة بدون عهدة مدير مالي نشطة وبرصيد متاح.';
 
   function handleFmcSubmitLimited(event) {
     const isAllowedAdmin = adminEmployeeOptionsWithFallback.some((user) => user.displayName === fmcForm.employeeName);
@@ -3828,6 +3868,7 @@ function MainApp({ auth, onLogout }) {
                 <div className="table-side">
                   <strong>{formatMoney(item.amount)}</strong>
                   <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => openFmcEditForm(item)}>تعديل</button>
                     <button type="button" className="ghost-button small" onClick={() => openFmcAssignForm(item)}>تعيين</button>
                     <button type="button" className="danger-button small" onClick={() => fmcCrud.requestDelete(item.id)}>حذف</button>
                   </div>
@@ -3847,9 +3888,9 @@ function MainApp({ auth, onLogout }) {
                   </select>
                 </label>
                 <label><span>قيمة العهدة</span><input name="amount" type="number" min="0" step="0.01" value={fmcForm.amount} onChange={fmcCrud.handleInput} required /></label>
-                <label><span>الغرض</span><input name="purpose" value={fmcForm.purpose} onChange={fmcCrud.handleInput} /></label>
-                <label><span>التاريخ</span><input name="custodyDate" type="date" value={fmcForm.custodyDate} onChange={fmcCrud.handleInput} /></label>
-                <label><span>الحالة</span><select name="status" value={fmcForm.status} onChange={fmcCrud.handleInput}>{custodyStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
+                <label><span>الغرض</span><input name="purpose" value={fmcForm.purpose} onChange={fmcCrud.handleInput} required /></label>
+                <label><span>التاريخ</span><input name="custodyDate" type="date" value={fmcForm.custodyDate} onChange={fmcCrud.handleInput} required /></label>
+                <label><span>الحالة</span><select name="status" value={fmcForm.status} onChange={fmcCrud.handleInput} required>{custodyStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
                 <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={fmcForm.notes} onChange={fmcCrud.handleInput} /></label>
               </>
             </>}
@@ -3865,7 +3906,7 @@ function MainApp({ auth, onLogout }) {
                 </select>
               </label>
               <label><span>المبلغ المعين</span><input name="amount" type="number" min="0" step="0.01" value={fmcAssignForm.amount} onChange={e => setFmcAssignForm(c => ({ ...c, amount: e.target.value }))} required /></label>
-              <label><span>التاريخ</span><input name="custodyDate" type="date" value={fmcAssignForm.custodyDate} onChange={e => setFmcAssignForm(c => ({ ...c, custodyDate: e.target.value }))} /></label>
+              <label><span>التاريخ</span><input name="custodyDate" type="date" value={fmcAssignForm.custodyDate} onChange={e => setFmcAssignForm(c => ({ ...c, custodyDate: e.target.value }))} required /></label>
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={fmcAssignForm.notes} onChange={e => setFmcAssignForm(c => ({ ...c, notes: e.target.value }))} /></label>
               <div className="form-actions full-width" style={{ marginTop: '16px' }}>
                 <button type="submit" className="primary-button" disabled={fmcSaving}>{fmcSaving ? 'جارٍ الحفظ...' : 'حفظ التعيين'}</button>
@@ -4054,9 +4095,36 @@ function MainApp({ auth, onLogout }) {
             editingId={mmpEditingId}
             saving={mmpSaving}
             isFormOpen={mmpFormOpen}
-            onOpenForm={mmpCrud.openForm}
+            formError={mmpFormOpen ? error : ''}
+            onOpenForm={() => {
+              if (!hasActiveManagerCustodyBalance) {
+                setError(machinePurchasesAddBlockedReason);
+                return;
+              }
+              setError('');
+              mmpCrud.openForm();
+            }}
             onCloseForm={mmpCrud.closeForm}
             onSubmit={mmpCrud.handleSubmit}
+            addDisabled={!hasActiveManagerCustodyBalance}
+            addDisabledTitle={machinePurchasesAddBlockedReason}
+            addDisabledHint={!hasActiveManagerCustodyBalance ? (
+              <>
+                {machinePurchasesAddBlockedReason}{' '}
+                <button
+                  type="button"
+                  className="inline-link-button"
+                  onClick={() => navigateTo('financial-manager-custody')}
+                >
+                  إضافة عهدة
+                </button>
+              </>
+            ) : ''}
+            extraActions={(
+              <span className={`status-chip ${hasActiveManagerCustodyBalance ? 'success' : 'warning'}`}>
+                الرصيد المتاح: {formatMoney(activeManagerCustodyAvailable)}
+              </span>
+            )}
             onBack={viewHistory.length > 0 ? goBack : undefined}
             renderRow={(item) => (
               <article key={item.id} className="table-row">
@@ -4078,7 +4146,15 @@ function MainApp({ auth, onLogout }) {
               </article>
             )}
             formFields={<>
-              <label><span>اسم المورد</span><input name="supplierName" value={mmpForm.supplierName} onChange={mmpCrud.handleInput} required /></label>
+              <label><span>اسم المورد</span>
+                <select name="supplierName" value={mmpForm.supplierName} onChange={mmpCrud.handleInput} required>
+                  <option value="">{supplierNameOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}</option>
+                  {supplierNameOptions.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                  {mmpForm.supplierName && !supplierNameOptions.includes(mmpForm.supplierName) ? <option value={mmpForm.supplierName}>{mmpForm.supplierName}</option> : null}
+                </select>
+              </label>
               <label><span>وصف العملية</span><input name="description" value={mmpForm.description} onChange={mmpCrud.handleInput} required /></label>
               <label><span>القيمة</span><input name="amount" type="number" min="0" step="0.01" value={mmpForm.amount} onChange={mmpCrud.handleInput} required /></label>
               <label><span>اسم الماكينة</span><input name="machineName" value={mmpForm.machineName} onChange={mmpCrud.handleInput} /></label>

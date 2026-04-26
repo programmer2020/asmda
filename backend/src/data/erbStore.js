@@ -1364,8 +1364,10 @@ export async function getMachineMaintenancePurchasesData() {
 
 export async function createMachinePurchaseRecord(payload) {
   const id = await nextId('MMP', 'machine_maintenance_purchases');
+  const amount = Number(payload.amount || 0);
+  await consumeFromManagerCustody(amount);
   const text = `INSERT INTO machine_maintenance_purchases (id, supplier_name, description, amount, purchase_date, machine_name, invoice_number, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`;
-  const values = [id, payload.supplierName||'', payload.description||'', Number(payload.amount||0), payload.purchaseDate||null, payload.machineName||'', payload.invoiceNumber||'', payload.notes||''];
+  const values = [id, payload.supplierName||'', payload.description||'', amount, payload.purchaseDate||null, payload.machineName||'', payload.invoiceNumber||'', payload.notes||''];
   const result = await query(text, values);
   return mapMachinePurchase(result.rows[0]);
 }
