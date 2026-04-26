@@ -562,6 +562,41 @@ const navigation = [
   }
 ];
 
+const navigationGroups = [
+  {
+    id: 'overview',
+    label: 'عام',
+    items: ['dashboard', 'notifications']
+  },
+  {
+    id: 'catalog-and-stores',
+    label: 'الأصناف والمخازن',
+    items: ['product-cards', 'final-product-store', 'raw-materials-packaging-store', 'raw-materials-catalog', 'suppliers', 'rep-sub-stores']
+  },
+  {
+    id: 'custodies-and-purchases',
+    label: 'العهد والمشتريات',
+    items: ['financial-manager-custody', 'custodies', 'raw-materials-purchases', 'machine-maintenance-purchases', 'misc-purchases', 'payroll-advances']
+  },
+  {
+    id: 'sales-and-collection',
+    label: 'المبيعات والتحصيل',
+    items: ['sales', 'checks', 'returns', 'customer-payment-alerts', 'free-samples', 'credit-sales', 'price-list', 'statement']
+  },
+  {
+    id: 'administration',
+    label: 'إدارة النظام',
+    items: ['users', 'roles']
+  }
+];
+
+const navigationGroupByItemId = navigationGroups.reduce((acc, group) => {
+  group.items.forEach((itemId) => {
+    acc[itemId] = group.id;
+  });
+  return acc;
+}, {});
+
 const placeholderModuleConfig = {};
 
 const salesStatuses = ['جديدة', 'قيد التنفيذ', 'مكتملة'];
@@ -1890,6 +1925,24 @@ function MainApp({ auth, onLogout }) {
     ...navigation.filter(item => canAccess(item.id)),
     ...(isAdmin ? [{ id: 'users', label: 'إدارة المستخدمين', helper: 'الصلاحيات والمستخدمون' }, { id: 'roles', label: 'إدارة الأدوار', helper: 'أدوار وصلاحيات الصفحات' }] : []),
   ];
+  const groupedNavigation = navigationGroups
+    .map((group) => ({
+      ...group,
+      items: filteredNavigation.filter((item) => navigationGroupByItemId[item.id] === group.id)
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const [expandedNavGroups, setExpandedNavGroups] = useState(() =>
+    navigationGroups.reduce((acc, group) => {
+      acc[group.id] = true;
+      return acc;
+    }, {})
+  );
+
+  function toggleNavGroup(groupId) {
+    setExpandedNavGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  }
+
   const [activeView, setActiveView] = useState(getInitialView);
   const [viewHistory, setViewHistory] = useState([]);
   const [dashboard, setDashboard] = useState(initialDashboard);
@@ -2057,6 +2110,12 @@ function MainApp({ auth, onLogout }) {
     }
     loadEmployeeUsers();
   }, [auth?.token]);
+
+  useEffect(() => {
+    const activeGroupId = navigationGroupByItemId[activeView];
+    if (!activeGroupId) return;
+    setExpandedNavGroups((prev) => (prev[activeGroupId] ? prev : { ...prev, [activeGroupId]: true }));
+  }, [activeView]);
 
   async function loadEmployeeUsers() {
     if (!auth?.token) {
@@ -3278,22 +3337,42 @@ function MainApp({ auth, onLogout }) {
 
       <aside className="sidebar card">
         <nav className="sidebar-nav">
-          {filteredNavigation.map((item) => (
-            <a
-              key={item.id}
-              className={`nav-link ${activeView === item.id ? 'active' : ''}`}
-              href={`#${item.id}`}
-              onClick={() => navigateTo(item.id)}
-            >
-              <strong>
-                {item.label}
-                {item.id === 'checks' && checkNotification && !notificationDismissed && (
-                  <span className="nav-badge">{checkNotification.count}</span>
-                )}
-              </strong>
-              <span>{item.helper}</span>
-            </a>
-          ))}
+          {groupedNavigation.map((group) => {
+            const isOpen = expandedNavGroups[group.id] !== false;
+            return (
+              <section key={group.id} className={`nav-group ${isOpen ? 'open' : ''}`}>
+                <button
+                  type="button"
+                  className="nav-group-toggle"
+                  onClick={() => toggleNavGroup(group.id)}
+                  aria-expanded={isOpen}
+                >
+                  <strong>{group.label}</strong>
+                  <span className="nav-group-chevron" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
+                </button>
+                {isOpen ? (
+                  <div className="nav-group-links">
+                    {group.items.map((item) => (
+                      <a
+                        key={item.id}
+                        className={`nav-link ${activeView === item.id ? 'active' : ''}`}
+                        href={`#${item.id}`}
+                        onClick={() => navigateTo(item.id)}
+                      >
+                        <strong>
+                          {item.label}
+                          {item.id === 'checks' && checkNotification && !notificationDismissed && (
+                            <span className="nav-badge">{checkNotification.count}</span>
+                          )}
+                        </strong>
+                        <span>{item.helper}</span>
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
         </nav>
       </aside>
 

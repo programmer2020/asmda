@@ -225,7 +225,48 @@ textarea {
 
 .sidebar-nav {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+}
+
+.nav-group {
+  border: 1px solid rgba(21, 128, 61, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+}
+
+.nav-group.open {
+  border-color: rgba(21, 128, 61, 0.16);
+  box-shadow: 0 8px 20px rgba(5, 46, 22, 0.04);
+}
+
+.nav-group-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px;
+  border: none;
+  background: rgba(255, 255, 255, 0.35);
+  color: #064e3b;
+  cursor: pointer;
+  text-align: right;
+}
+
+.nav-group-toggle strong {
+  font-size: 0.9rem;
+}
+
+.nav-group-chevron {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.nav-group-links {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
 }
 
 .nav-link {
@@ -1001,7 +1042,7 @@ textarea {
   }
 
   .sidebar-nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
