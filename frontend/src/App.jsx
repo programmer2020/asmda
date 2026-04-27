@@ -17,6 +17,60 @@ function storeAuth(data) { localStorage.setItem('asmda_auth', JSON.stringify(dat
 function clearAuth() { localStorage.removeItem('asmda_auth'); }
 function authHeaders(token) { return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }; }
 
+// ─── Pagination ──────────────────────────────────────────────────
+const PAGE_SIZE = 15;
+const PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100];
+
+function usePagination(items) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSizeState] = useState(PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [items.length]);
+  const setPageSize = (size) => { setPageSizeState(size); setPage(1); };
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = items.slice((safePage - 1) * pageSize, safePage * pageSize);
+  return { page: safePage, setPage, pageItems, totalPages, pageSize, setPageSize };
+}
+
+function getPageButtons(page, totalPages) {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const delta = 2;
+  const result = [1];
+  const lo = Math.max(2, page - delta);
+  const hi = Math.min(totalPages - 1, page + delta);
+  if (lo > 2) result.push('...');
+  for (let i = lo; i <= hi; i++) result.push(i);
+  if (hi < totalPages - 1) result.push('...');
+  result.push(totalPages);
+  return result;
+}
+
+function Pagination({ page, totalPages, onPageChange, pageSize, onPageSizeChange }) {
+  const buttons = getPageButtons(page, totalPages);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '14px 0 2px', flexWrap: 'wrap' }} dir="ltr">
+      <select
+        value={pageSize}
+        onChange={e => onPageSizeChange(Number(e.target.value))}
+        style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.85rem', cursor: 'pointer', marginRight: '6px' }}
+      >
+        {PAGE_SIZE_OPTIONS.map(s => <option key={s} value={s}>{s} / صفحة</option>)}
+      </select>
+      {totalPages > 1 && <>
+        <button type="button" className="ghost-button small" onClick={() => onPageChange(1)} disabled={page <= 1}>«« الأول</button>
+        <button type="button" className="ghost-button small" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>‹ السابق</button>
+        {buttons.map((b, i) =>
+          b === '...'
+            ? <span key={`e${i}`} style={{ padding: '0 2px', color: 'var(--text-light)' }}>…</span>
+            : <button key={b} type="button" className={b === page ? 'primary-button small' : 'ghost-button small'} onClick={() => onPageChange(b)} style={{ minWidth: '34px' }}>{b}</button>
+        )}
+        <button type="button" className="ghost-button small" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>التالي ›</button>
+        <button type="button" className="ghost-button small" onClick={() => onPageChange(totalPages)} disabled={page >= totalPages}>الأخير »»</button>
+      </>}
+    </div>
+  );
+}
+
 // ─── Login Screen ────────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState('');
@@ -115,6 +169,9 @@ function UsersPage({ token }) {
     else { const d = await res.json().catch(() => ({})); setError(d.message || 'خطأ في الحذف'); }
   }
 
+  const reversedUsers = [...users].reverse();
+  const { page: usersPage, setPage: setUsersPage, pageItems: usersPageItems, totalPages: usersTotalPages, pageSize: usersPageSize, setPageSize: setUsersPageSize } = usePagination(reversedUsers);
+
   return (
     <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
       {notice && <div className="notice success" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>{notice}</span><button type="button" onClick={() => setNotice('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button></div>}
@@ -125,7 +182,7 @@ function UsersPage({ token }) {
           <button type="button" className="primary-button" onClick={openAdd}>إضافة مستخدم</button>
         </div>
         <div className="table-list">
-          {users.map(u => (
+          {usersPageItems.map(u => (
             <article key={u.id} className="table-row">
               <div className="table-main">
                 <div className="record-top">
@@ -145,6 +202,7 @@ function UsersPage({ token }) {
           ))}
           {users.length === 0 && <p className="empty-notice">لا يوجد مستخدمون.</p>}
         </div>
+        <Pagination page={usersPage} totalPages={usersTotalPages} onPageChange={setUsersPage} pageSize={usersPageSize} onPageSizeChange={setUsersPageSize} />
       </article>
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingUser ? 'تعديل مستخدم' : 'إضافة مستخدم جديد'}>
@@ -252,6 +310,9 @@ function RepsPage({ token }) {
     setError(data.message || 'تعذر حذف المندوب.');
   }
 
+  const reversedReps = [...reps].reverse();
+  const { page: repsPage, setPage: setRepsPage, pageItems: repsPageItems, totalPages: repsTotalPages, pageSize: repsPageSize, setPageSize: setRepsPageSize } = usePagination(reversedReps);
+
   return (
     <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
       {notice ? (
@@ -272,7 +333,7 @@ function RepsPage({ token }) {
         </div>
 
         <div className="table-list">
-          {reps.map((rep) => (
+          {repsPageItems.map((rep) => (
             <article key={rep.id} className="table-row">
               <div className="table-main">
                 <div className="record-top">
@@ -291,6 +352,7 @@ function RepsPage({ token }) {
           ))}
           {reps.length === 0 ? <p className="empty-notice">لا يوجد مناديب حتى الآن.</p> : null}
         </div>
+        <Pagination page={repsPage} totalPages={repsTotalPages} onPageChange={setRepsPage} pageSize={repsPageSize} onPageSizeChange={setRepsPageSize} />
       </article>
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingRep ? 'تعديل مندوب' : 'إضافة مندوب جديد'}>
@@ -1101,6 +1163,8 @@ function PlaceholderModuleView({ title, description }) {
 }
 
 function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, renderRow, form, editingId, saving, isFormOpen, onOpenForm, onCloseForm, onSubmit, formTitle, formFields, onBack, extraActions, addDisabled = false, addDisabledHint = '', addDisabledTitle = '', formError = '' }) {
+  const reversedItems = [...(data.items || [])].reverse();
+  const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
   return (
     <>
       <SummaryCards items={data.overview} />
@@ -1124,9 +1188,10 @@ function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, render
             </div>
           </div>
           <div className="table-list">
-            {data.items.map(renderRow)}
+            {pageItems.map(renderRow)}
             {data.items.length === 0 && <p className="empty-notice">{emptyLabel}</p>}
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
         </article>
       </section>
       <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? `تعديل ${formTitle}` : `إضافة ${formTitle}`} errorMessage={formError}>
@@ -1399,6 +1464,8 @@ function SalesView({
   onEdit,
   onDelete
 }) {
+  const reversedItems = [...(sales.items || [])].reverse();
+  const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
   return (
     <>
       <SummaryCards items={sales.overview} />
@@ -1416,7 +1483,7 @@ function SalesView({
           </div>
 
           <div className="table-list">
-            {sales.items.map((item) => (
+            {pageItems.map((item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
                   <div className="record-top">
@@ -1442,6 +1509,7 @@ function SalesView({
               </article>
             ))}
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
         </article>
       </section>
 
@@ -1522,6 +1590,8 @@ function CreditSalesView({
   onEdit,
   onDelete
 }) {
+  const reversedItems = [...(creditSales.items || [])].reverse();
+  const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
   return (
     <>
       <SummaryCards items={creditSales.overview} />
@@ -1539,7 +1609,7 @@ function CreditSalesView({
           </div>
 
           <div className="table-list">
-            {creditSales.items.map((item) => (
+            {pageItems.map((item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
                   <div className="record-top">
@@ -1565,6 +1635,7 @@ function CreditSalesView({
               </article>
             ))}
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
         </article>
       </section>
 
@@ -1636,6 +1707,8 @@ function ReturnsView({
   onEdit,
   onDelete
 }) {
+  const reversedItems = [...(returns.items || [])].reverse();
+  const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
   return (
     <>
       <SummaryCards items={returns.overview} />
@@ -1653,7 +1726,7 @@ function ReturnsView({
           </div>
 
           <div className="table-list">
-            {returns.items.map((item) => (
+            {pageItems.map((item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
                   <div className="record-top">
@@ -1679,6 +1752,7 @@ function ReturnsView({
               </article>
             ))}
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
         </article>
       </section>
 
@@ -1750,6 +1824,8 @@ function PriceListView({
   onEdit,
   onDelete
 }) {
+  const reversedItems = [...(priceList.items || [])].reverse();
+  const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
   return (
     <>
       <SummaryCards items={priceList.overview} />
@@ -1767,7 +1843,7 @@ function PriceListView({
           </div>
 
           <div className="table-list">
-            {priceList.items.map((item) => {
+            {pageItems.map((item) => {
               const margin = item.purchasePrice > 0 
                 ? (((item.sellingPrice - item.purchasePrice) / item.purchasePrice) * 100).toFixed(1)
                 : '0.0';
@@ -1803,6 +1879,7 @@ function PriceListView({
               );
             })}
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
         </article>
       </section>
 
@@ -1845,6 +1922,8 @@ function PriceListView({
 
 
 function CustodiesView({ custodies, onManageTransactions, onDelete, canDelete = false }) {
+  const reversedItems = [...(custodies.items || [])].reverse();
+  const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
   return (
     <>
       <SummaryCards items={custodies.overview} />
@@ -1859,7 +1938,7 @@ function CustodiesView({ custodies, onManageTransactions, onDelete, canDelete = 
           </div>
 
           <div className="table-list">
-            {custodies.items.map((item) => (
+            {pageItems.map((item) => (
               <article key={item.id} className="table-row">
                 <div className="table-main">
                   <div className="record-top">
@@ -1893,6 +1972,7 @@ function CustodiesView({ custodies, onManageTransactions, onDelete, canDelete = 
             ))}
             {custodies.items.length === 0 && <p className="empty-notice">لا توجد عهدات مسجلة بعد.</p>}
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
         </article>
       </section>
     </>
@@ -1916,6 +1996,8 @@ function ChecksView({
   const todayChecks = checks.items.filter(
     (item) => item.collectionDate === today && item.status === 'معلق'
   );
+  const reversedItems = [...(checks.items || [])].reverse();
+  const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
 
   return (
     <>
@@ -1982,7 +2064,7 @@ function ChecksView({
           </div>
 
           <div className="table-list">
-            {checks.items.map((item) => {
+            {pageItems.map((item) => {
               const isToday = item.collectionDate === today && item.status === 'معلق';
               return (
                 <article key={item.id} className={`table-row${isToday ? ' checks-highlight' : ''}`}>
@@ -2016,6 +2098,7 @@ function ChecksView({
               <p className="empty-notice">لا توجد شيكات مسجلة بعد.</p>
             )}
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
         </article>
       </section>
 
@@ -3802,22 +3885,18 @@ function MainApp({ auth, onLogout }) {
             )}
             formFields={<>
               <label className="full-width"><span>الصنف</span>
-                {productCards.items.length > 0 ? (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <select name="productName" value={fpForm.productName} onChange={(e) => {
-                    const selected = productCards.items.find(p => p.productName === e.target.value);
+                    const selected = productCards.items?.find(p => p.productName === e.target.value);
                     setFpForm(prev => ({ ...prev, productName: e.target.value, category: selected?.category || prev.category, unit: selected?.unit || prev.unit }));
-                  }} required>
+                  }} required style={{ flex: 1 }}>
                     <option value="">— اختر صنفاً من كبون الأصناف —</option>
-                    {productCards.items.map(p => (
+                    {productCards?.items?.map(p => (
                       <option key={p.id} value={p.productName}>{p.productName}{p.code ? ` (${p.code})` : ''}</option>
                     ))}
                   </select>
-                ) : (
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input name="productName" value={fpForm.productName} onChange={fpCrud.handleInput} required style={{ flex: 1 }} placeholder="اسم المنتج" />
-                    <button type="button" className="ghost-button small" onClick={() => { fpCrud.closeForm(); navigateTo('product-cards'); }}>➕ إضافة كبون أصناف</button>
-                  </div>
-                )}
+                  <button type="button" className="ghost-button small" onClick={() => { fpCrud.closeForm(); navigateTo('product-cards'); }} title="إضافة كبون أصناف">➕ إضافة كبون أصناف</button>
+                </div>
               </label>
               <label><span>التصنيف</span><input name="category" value={fpForm.category} onChange={fpCrud.handleInput} /></label>
               <label><span>الكمية</span><input name="quantity" type="number" min="0" value={fpForm.quantity} onChange={fpCrud.handleInput} /></label>
