@@ -2204,6 +2204,7 @@ function MainApp({ auth, onLogout }) {
   const [checks, setChecks] = useState(initialChecks);
   const [statement, setStatement] = useState(initialStatement);
   const [salesForm, setSalesForm] = useState(initialSalesForm);
+  const [salesRepProducts, setSalesRepProducts] = useState([]);
   const [creditForm, setCreditForm] = useState(initialCreditForm);
   const [returnsForm, setReturnsForm] = useState(initialReturnsForm);
   const [priceListForm, setPriceListForm] = useState(initialPriceListForm);
@@ -2297,6 +2298,7 @@ function MainApp({ auth, onLogout }) {
   const [transferSaving, setTransferSaving] = useState(false);
   const [repUsers, setRepUsers] = useState([]);
   const [employeeUsers, setEmployeeUsers] = useState([]);
+  const [registeredReps, setRegisteredReps] = useState([]);
   const [saleDeductForm, setSaleDeductForm] = useState({ repName: '', productName: '', quantity: '' });
   const [saleDeductOpen, setSaleDeductOpen] = useState(false);
   const [saleDeductSaving, setSaleDeductSaving] = useState(false);
@@ -2411,6 +2413,11 @@ function MainApp({ auth, onLogout }) {
         ['/api/free-samples', setFreeSamples],
         ['/api/product-cards', setProductCards],
       ];
+      // Load reps separately (flat array, not {overview,items})
+      fetch('/api/reps', { headers: { Authorization: `Bearer ${auth?.token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => setRegisteredReps(Array.isArray(data) ? data : []))
+        .catch(() => {});
       await Promise.all(pairs.map(async ([url, setter]) => {
         try { const r = await fetch(url); if (r.ok) setter(await r.json()); } catch { /* ignore individual failures */ }
       }));
@@ -2684,11 +2691,20 @@ function MainApp({ auth, onLogout }) {
   function handleSalesInputChange(event) {
     const { name, value } = event.target;
     setSalesForm((current) => {
-      if (name === 'salesRep') {
-        const repProducts = Array.from(salesProductsByRep[value] || []);
+      if (name === 'customerName' || name === 'salesRep') {
+        // Fetch products for the selected rep from repSubStores
+        const repProducts = Array.from(
+          new Set(
+            (repSubStores?.items || []).filter(
+              (item) => item?.repName?.trim().toLowerCase() === value?.trim().toLowerCase()
+            ).map((item) => item?.productName).filter(Boolean)
+          )
+        );
+        setSalesRepProducts(repProducts);
         const keepCurrentProduct = repProducts.includes(current.productName);
         return {
           ...current,
+          [name]: value,
           salesRep: value,
           productName: keepCurrentProduct ? current.productName : ''
         };
@@ -2700,11 +2716,21 @@ function MainApp({ auth, onLogout }) {
   function openSalesForm() {
     setSalesEditingId('');
     setSalesForm(initialSalesForm);
+    setSalesRepProducts([]);
     setSalesFormOpen(true);
   }
 
   function startSalesEdit(item) {
     setSalesEditingId(item.id);
+    const repName = item.salesRep || item.customerName || '';
+    const repProducts = Array.from(
+      new Set(
+        (repSubStores?.items || []).filter(
+          (s) => s?.repName?.trim().toLowerCase() === repName.trim().toLowerCase()
+        ).map((s) => s?.productName).filter(Boolean)
+      )
+    );
+    setSalesRepProducts(repProducts);
     setSalesForm({
       customerName: item.customerName,
       productName: item.productName,
@@ -3443,21 +3469,20 @@ function MainApp({ auth, onLogout }) {
     ? suppliers.items.map((item) => item?.name).filter(Boolean)
     : [];
   const salesRepOptions = Array.from(new Set([
+    ...registeredReps.map((rep) => rep.displayName).filter(Boolean),
     ...availableEmployeeUsers.filter((user) => user.role === 'sales').map((user) => user.displayName).filter(Boolean),
     ...(repSubStores?.items || []).map((item) => item?.repName).filter(Boolean)
   ]));
-  const salesProductsByRep = (repSubStores?.items || []).reduce((acc, item) => {
-    const repName = item?.repName;
-    const productName = item?.productName;
-    if (!repName || !productName) return acc;
-    if (!acc[repName]) acc[repName] = new Set();
-    acc[repName].add(productName);
-    return acc;
-  }, {});
   const allSalesProductOptions = Array.from(new Set((repSubStores?.items || []).map((item) => item?.productName).filter(Boolean)));
-  const salesProductOptions = salesForm.salesRep
-    ? Array.from(salesProductsByRep[salesForm.salesRep] || [])
-    : allSalesProductOptions;
+  const salesProductOptions = salesRepProducts.length > 0
+    ? salesRepProducts
+    : salesForm.salesRep
+      ? Array.from(new Set(
+          (repSubStores?.items || []).filter(
+            (item) => item?.repName?.trim().toLowerCase() === salesForm.salesRep?.trim().toLowerCase()
+          ).map((item) => item?.productName).filter(Boolean)
+        ))
+      : allSalesProductOptions;
   const transferRepOptions = Array.from(new Set([
     ...repUsers.map((user) => user?.displayName).filter(Boolean),
     ...(repSubStores?.items || []).map((item) => item?.repName).filter(Boolean)
@@ -3600,7 +3625,7 @@ function MainApp({ auth, onLogout }) {
             sales={sales}
             form={salesForm}
             salesRepOptions={salesRepOptions}
-            salesProductOptions={transferProductOptions}
+            salesProductOptions={salesProductOptions}
             customerOptions={customerOptions}
             editingId={salesEditingId}
             saving={salesSaving}
