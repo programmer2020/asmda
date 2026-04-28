@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS installment_sales (
 CREATE TABLE IF NOT EXISTS return_sales (
   id VARCHAR(50) PRIMARY KEY,
   customer_name VARCHAR(255) NOT NULL,
+  product_name VARCHAR(255),
   original_invoice_number VARCHAR(100),
   amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
   reason TEXT,
@@ -78,6 +79,15 @@ CREATE TABLE IF NOT EXISTS checks (
   amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
   collection_date DATE,
   status VARCHAR(50) DEFAULT 'معلق',
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS cash_receipts (
+  id VARCHAR(50) PRIMARY KEY,
+  customer_name VARCHAR(255) NOT NULL,
+  amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  receipt_date DATE,
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

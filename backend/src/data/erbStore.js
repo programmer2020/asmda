@@ -42,6 +42,7 @@ function mapReturn(row) {
   return {
     id: row.id,
     customerName: row.customer_name,
+    productName: row.product_name || '',
     originalInvoiceNumber: row.original_invoice_number,
     amount: Number(row.amount),
     reason: row.reason || '',
@@ -403,12 +404,13 @@ export async function createReturnRecord(payload) {
 
   const text = `
     INSERT INTO return_sales 
-    (id, customer_name, original_invoice_number, amount, reason, return_date, status, sales_rep, notes) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *
+    (id, customer_name, product_name, original_invoice_number, amount, reason, return_date, status, sales_rep, notes) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *
   `;
   const values = [
     id,
     payload.customerName || '',
+    payload.productName || '',
     payload.originalInvoiceNumber || '',
     Number(payload.amount || 0),
     payload.reason || '',
@@ -426,18 +428,20 @@ export async function updateReturnRecord(id, payload) {
   const text = `
     UPDATE return_sales SET 
       customer_name = COALESCE($2, customer_name),
-      original_invoice_number = COALESCE($3, original_invoice_number),
-      amount = COALESCE($4, amount),
-      reason = COALESCE($5, reason),
-      return_date = COALESCE($6, return_date),
-      status = COALESCE($7, status),
-      sales_rep = COALESCE($8, sales_rep),
-      notes = COALESCE($9, notes)
+      product_name = COALESCE($3, product_name),
+      original_invoice_number = COALESCE($4, original_invoice_number),
+      amount = COALESCE($5, amount),
+      reason = COALESCE($6, reason),
+      return_date = COALESCE($7, return_date),
+      status = COALESCE($8, status),
+      sales_rep = COALESCE($9, sales_rep),
+      notes = COALESCE($10, notes)
     WHERE id = $1 RETURNING *
   `;
   const values = [
     id,
     payload.customerName,
+    payload.productName,
     payload.originalInvoiceNumber,
     payload.amount !== undefined ? Number(payload.amount) : undefined,
     payload.reason,
@@ -880,6 +884,50 @@ export async function updateCheckRecord(id, payload) {
 
 export async function deleteCheckRecord(id) {
   const result = await query('DELETE FROM checks WHERE id = $1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Cash Receipts ─────────────────────────────────────────────────────────────
+
+function mapCashReceipt(row) {
+  return {
+    id: row.id,
+    customerName: row.customer_name,
+    amount: Number(row.amount),
+    receiptDate: row.receipt_date ? new Date(row.receipt_date).toISOString().split('T')[0] : null,
+    notes: row.notes || ''
+  };
+}
+
+export async function getCashReceiptsData() {
+  const result = await query('SELECT * FROM cash_receipts ORDER BY receipt_date DESC, created_at DESC');
+  const items = result.rows.map(mapCashReceipt);
+  const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+  const overview = [
+    { id: 'cash-total', label: 'إجمالي المقبوض نقداً', value: totalAmount, type: 'currency', helper: 'قيمة جميع الدفعات النقدية', tone: 'calm' },
+    { id: 'cash-count', label: 'عدد المقبوضات', value: items.length, type: 'number', helper: 'إجمالي سجلات الدفع النقدي', tone: 'accent' }
+  ];
+  return { overview, items };
+}
+
+export async function createCashReceiptRecord(payload) {
+  const id = await nextId('CSH', 'cash_receipts');
+  const text = `INSERT INTO cash_receipts (id, customer_name, amount, receipt_date, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`;
+  const values = [id, payload.customerName || '', Number(payload.amount || 0), payload.receiptDate || null, payload.notes || ''];
+  const result = await query(text, values);
+  return mapCashReceipt(result.rows[0]);
+}
+
+export async function updateCashReceiptRecord(id, payload) {
+  const text = `UPDATE cash_receipts SET customer_name=COALESCE($2,customer_name), amount=COALESCE($3,amount), receipt_date=COALESCE($4,receipt_date), notes=COALESCE($5,notes) WHERE id=$1 RETURNING *`;
+  const values = [id, payload.customerName, payload.amount !== undefined ? Number(payload.amount) : undefined, payload.receiptDate, payload.notes];
+  const result = await query(text, values);
+  if (result.rows.length === 0) return null;
+  return mapCashReceipt(result.rows[0]);
+}
+
+export async function deleteCashReceiptRecord(id) {
+  const result = await query('DELETE FROM cash_receipts WHERE id=$1 RETURNING id', [id]);
   return result.rowCount > 0;
 }
 

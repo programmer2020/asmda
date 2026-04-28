@@ -867,6 +867,8 @@ const initialChecks = {
   items: []
 };
 
+const initialCashReceipts = { overview: [], items: [] };
+
 const initialCheckForm = {
   customerName: '',
   checkNumber: '',
@@ -874,6 +876,13 @@ const initialCheckForm = {
   amount: '',
   collectionDate: '',
   status: 'معلق',
+  notes: ''
+};
+
+const initialCashForm = {
+  customerName: '',
+  amount: '',
+  receiptDate: '',
   notes: ''
 };
 
@@ -929,6 +938,7 @@ const initialCreditForm = {
 
 const initialReturnsForm = {
   customerName: '',
+  productName: '',
   originalInvoiceNumber: '',
   amount: '',
   reason: '',
@@ -1334,7 +1344,56 @@ function StatementView({
   );
 }
 
-function DashboardView({ dashboard, onNavigate, activeView }) {
+function DbModeSwitch({ token }) {
+  const [mode, setMode] = useState(null);
+  const [switching, setSwitching] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/db-mode', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.mode) setMode(data.mode); })
+      .catch(() => {});
+  }, [token]);
+
+  async function toggle() {
+    const next = mode === 'local' ? 'cloud' : 'local';
+    setSwitching(true);
+    try {
+      const r = await fetch('/api/db-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ mode: next })
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setMode(data.mode);
+      }
+    } finally {
+      setSwitching(false);
+    }
+  }
+
+  if (!mode) return null;
+
+  const isCloud = mode === 'cloud';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', background: isCloud ? '#e8f5e9' : '#fff3e0', borderRadius: '12px', border: `1px solid ${isCloud ? '#a5d6a7' : '#ffcc80'}`, marginTop: '16px', flexWrap: 'wrap' }}>
+      <span style={{ fontWeight: 600, fontSize: '0.95rem', color: isCloud ? '#2e7d32' : '#e65100' }}>
+        {isCloud ? '☁ Neon Cloud Database' : '💾 Local Mode (بيانات مؤقتة)'}
+      </span>
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={switching}
+        style={{ marginRight: 'auto', padding: '6px 18px', borderRadius: '20px', border: 'none', cursor: switching ? 'not-allowed' : 'pointer', background: isCloud ? '#2e7d32' : '#e65100', color: '#fff', fontWeight: 600, fontSize: '0.85rem', opacity: switching ? 0.6 : 1 }}
+      >
+        {switching ? 'جارٍ التبديل...' : isCloud ? 'التبديل إلى المحلي' : 'التبديل إلى Cloud'}
+      </button>
+    </div>
+  );
+}
+
+function DashboardView({ dashboard, onNavigate, activeView, token, isAdmin }) {
   const { meta, brand, summary, alerts, recentSales, recentCreditSales } = dashboard;
   const quickLinks = navigation;
   const heroButtonLabels = {
@@ -1374,6 +1433,7 @@ function DashboardView({ dashboard, onNavigate, activeView }) {
             <span className="hero-runtime-label">حالة البيئة</span>
             <strong>{meta?.message ?? 'جارٍ تجهيز البيانات المحلية.'}</strong>
           </div>
+          {isAdmin && <DbModeSwitch token={token} />}
         </article>
 
       </section>
@@ -1705,7 +1765,9 @@ function ReturnsView({
   onChange,
   onSubmit,
   onEdit,
-  onDelete
+  onDelete,
+  productOptions = [],
+  supplierOptions = []
 }) {
   const reversedItems = [...(returns.items || [])].reverse();
   const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
@@ -1733,7 +1795,7 @@ function ReturnsView({
                     <strong>{item.customerName}</strong>
                     <span className={`status-chip ${getStatusTone(item.status)}`}>{item.status}</span>
                   </div>
-                  <p>{item.reason}</p>
+                  <p>{item.productName ? `صنف: ${item.productName}` : item.reason}</p>
                   <small>
                     {item.salesRep} - {formatDate(item.returnDate)}
                   </small>
@@ -1760,7 +1822,22 @@ function ReturnsView({
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل</span>
-            <input name="customerName" value={form.customerName} onChange={onChange} />
+            <select name="customerName" value={form.customerName} onChange={onChange}>
+              <option value="">{supplierOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}</option>
+              {supplierOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+              {form.customerName && !supplierOptions.includes(form.customerName) ? <option value={form.customerName}>{form.customerName}</option> : null}
+            </select>
+          </label>
+          <label>
+            <span>اسم الصنف</span>
+            <select name="productName" value={form.productName} onChange={onChange}>
+              <option value="">-- اختر الصنف --</option>
+              {productOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
           </label>
           <label>
             <span>رقم الفاتورة الأصلية (اختياري)</span>
@@ -1990,123 +2067,208 @@ function ChecksView({
   onChange,
   onSubmit,
   onEdit,
-  onDelete
+  onDelete,
+  cashReceipts,
+  cashForm,
+  cashEditingId,
+  cashSaving,
+  isCashFormOpen,
+  onOpenCashForm,
+  onCloseCashForm,
+  onCashChange,
+  onCashSubmit,
+  onCashEdit,
+  onCashDelete,
+  supplierOptions = []
 }) {
+  const [activeTab, setActiveTab] = useState('checks');
   const today = getTodayLocalDateKey();
   const todayChecks = checks.items.filter(
     (item) => item.collectionDate === today && item.status === 'معلق'
   );
   const reversedItems = [...(checks.items || [])].reverse();
   const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
+  const reversedCash = [...(cashReceipts?.items || [])].reverse();
+  const { page: cashPage, setPage: setCashPage, pageItems: cashPageItems, totalPages: cashTotalPages, pageSize: cashPageSize, setPageSize: setCashPageSize } = usePagination(reversedCash);
 
   return (
     <>
-      <SummaryCards items={checks.overview} />
+      <SummaryCards items={activeTab === 'checks' ? checks.overview : (cashReceipts?.overview || [])} />
 
-      {todayChecks.length > 0 && (
-        <section className="checks-today-banner">
-          <div className="checks-today-icon">🔔</div>
-          <div className="checks-today-content">
-            <strong>شيكات موعد تحصيلها اليوم — {new Intl.DateTimeFormat('ar-EG', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date())}</strong>
-            <p>يوجد <strong>{todayChecks.length}</strong> شيك يستحق التحصيل اليوم بإجمالي&nbsp;
-              {new Intl.NumberFormat('ar-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 }).format(
-                todayChecks.reduce((s, c) => s + c.amount, 0)
-              )}
-            </p>
-          </div>
-        </section>
-      )}
+      {/* Tab switcher */}
+      <div style={{ display: 'flex', gap: '8px', marginTop: '16px', marginBottom: '4px' }}>
+        <button
+          type="button"
+          className={activeTab === 'checks' ? 'primary-button small' : 'ghost-button small'}
+          onClick={() => setActiveTab('checks')}
+        >
+          شيكات
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'cash' ? 'primary-button small' : 'ghost-button small'}
+          onClick={() => setActiveTab('cash')}
+        >
+          دفعات نقدية
+        </button>
+      </div>
 
-      {todayChecks.length > 0 && (
-        <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '0' }}>
-          <article className="card table-card checks-today-card">
+      {/* ── Checks Tab ── */}
+      {activeTab === 'checks' && <>
+        {todayChecks.length > 0 && (
+          <section className="checks-today-banner">
+            <div className="checks-today-icon">🔔</div>
+            <div className="checks-today-content">
+              <strong>شيكات موعد تحصيلها اليوم — {new Intl.DateTimeFormat('ar-EG', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date())}</strong>
+              <p>يوجد <strong>{todayChecks.length}</strong> شيك يستحق التحصيل اليوم بإجمالي&nbsp;
+                {new Intl.NumberFormat('ar-EG', { style: 'currency', currency: 'EGP', maximumFractionDigits: 0 }).format(
+                  todayChecks.reduce((s, c) => s + c.amount, 0)
+                )}
+              </p>
+            </div>
+          </section>
+        )}
+
+        {todayChecks.length > 0 && (
+          <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '0' }}>
+            <article className="card table-card checks-today-card">
+              <div className="table-actions-header">
+                <div>
+                  <p className="eyebrow">تحصيل اليوم</p>
+                  <h3>الشيكات المستحقة اليوم</h3>
+                </div>
+              </div>
+              <div className="table-list">
+                {todayChecks.map((item) => (
+                  <article key={item.id} className="table-row checks-due-row">
+                    <div className="table-main">
+                      <div className="record-top">
+                        <strong>{item.customerName}</strong>
+                        <span className="status-chip danger">تحصيل اليوم</span>
+                      </div>
+                      <p>{item.bankName ? `بنك: ${item.bankName}` : ''}{item.checkNumber ? ` — شيك رقم: ${item.checkNumber}` : ''}</p>
+                    </div>
+                    <div className="table-side">
+                      <strong>{formatMoney(item.amount)}</strong>
+                      <div className="row-actions">
+                        <button type="button" className="primary-button small" onClick={() => onEdit(item)}>
+                          تحديث الحالة
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </section>
+        )}
+
+        <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
+          <article className="card table-card">
             <div className="table-actions-header">
               <div>
-                <p className="eyebrow">تحصيل اليوم</p>
-                <h3>الشيكات المستحقة اليوم</h3>
+                <p className="eyebrow">سجل الشيكات</p>
+                <h3>إدارة الشيكات ومواعيد التحصيل</h3>
               </div>
+              <button type="button" className="primary-button" onClick={onOpenForm}>
+                إضافة شيك
+              </button>
             </div>
+
             <div className="table-list">
-              {todayChecks.map((item) => (
-                <article key={item.id} className="table-row checks-due-row">
+              {pageItems.map((item) => {
+                const isToday = item.collectionDate === today && item.status === 'معلق';
+                return (
+                  <article key={item.id} className={`table-row${isToday ? ' checks-highlight' : ''}`}>
+                    <div className="table-main">
+                      <div className="record-top">
+                        <strong>{item.customerName}</strong>
+                        <span className={`status-chip ${getCheckStatusTone(item.status)}`}>{item.status}</span>
+                        {isToday && <span className="status-chip danger">اليوم</span>}
+                      </div>
+                      <p>
+                        {item.bankName ? `${item.bankName}` : '—'}
+                        {item.checkNumber ? ` · شيك رقم ${item.checkNumber}` : ''}
+                      </p>
+                      <small>تاريخ التحصيل: {formatDate(item.collectionDate)}</small>
+                    </div>
+                    <div className="table-side">
+                      <strong>{formatMoney(item.amount)}</strong>
+                      <div className="row-actions">
+                        <button type="button" className="ghost-button small" onClick={() => onEdit(item)}>
+                          تعديل
+                        </button>
+                        <button type="button" className="danger-button small" onClick={() => onDelete(item.id)}>
+                          حذف
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+              {checks.items.length === 0 && (
+                <p className="empty-notice">لا توجد شيكات مسجلة بعد.</p>
+              )}
+            </div>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
+          </article>
+        </section>
+      </>}
+
+      {/* ── Cash Tab ── */}
+      {activeTab === 'cash' && (
+        <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
+          <article className="card table-card">
+            <div className="table-actions-header">
+              <div>
+                <p className="eyebrow">سجل الدفعات النقدية</p>
+                <h3>المقبوضات النقدية من العملاء</h3>
+              </div>
+              <button type="button" className="primary-button" onClick={onOpenCashForm}>
+                إضافة دفعة نقدية
+              </button>
+            </div>
+
+            <div className="table-list">
+              {cashPageItems.map((item) => (
+                <article key={item.id} className="table-row">
                   <div className="table-main">
                     <div className="record-top">
                       <strong>{item.customerName}</strong>
-                      <span className="status-chip danger">تحصيل اليوم</span>
+                      <span className="status-chip calm">نقدي</span>
                     </div>
-                    <p>{item.bankName ? `بنك: ${item.bankName}` : ''}{item.checkNumber ? ` — شيك رقم: ${item.checkNumber}` : ''}</p>
+                    <small>تاريخ الاستلام: {formatDate(item.receiptDate)}</small>
+                    {item.notes && <p style={{ fontSize: '0.85rem', color: 'var(--text-light)', marginTop: '2px' }}>{item.notes}</p>}
                   </div>
                   <div className="table-side">
                     <strong>{formatMoney(item.amount)}</strong>
                     <div className="row-actions">
-                      <button type="button" className="primary-button small" onClick={() => onEdit(item)}>
-                        تحديث الحالة
-                      </button>
+                      <button type="button" className="ghost-button small" onClick={() => onCashEdit(item)}>تعديل</button>
+                      <button type="button" className="danger-button small" onClick={() => onCashDelete(item.id)}>حذف</button>
                     </div>
                   </div>
                 </article>
               ))}
+              {(cashReceipts?.items || []).length === 0 && (
+                <p className="empty-notice">لا توجد دفعات نقدية مسجلة بعد.</p>
+              )}
             </div>
+            <Pagination page={cashPage} totalPages={cashTotalPages} onPageChange={setCashPage} pageSize={cashPageSize} onPageSizeChange={setCashPageSize} />
           </article>
         </section>
       )}
 
-      <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
-        <article className="card table-card">
-          <div className="table-actions-header">
-            <div>
-              <p className="eyebrow">سجل الشيكات</p>
-              <h3>إدارة الشيكات ومواعيد التحصيل</h3>
-            </div>
-            <button type="button" className="primary-button" onClick={onOpenForm}>
-              إضافة شيك
-            </button>
-          </div>
-
-          <div className="table-list">
-            {pageItems.map((item) => {
-              const isToday = item.collectionDate === today && item.status === 'معلق';
-              return (
-                <article key={item.id} className={`table-row${isToday ? ' checks-highlight' : ''}`}>
-                  <div className="table-main">
-                    <div className="record-top">
-                      <strong>{item.customerName}</strong>
-                      <span className={`status-chip ${getCheckStatusTone(item.status)}`}>{item.status}</span>
-                      {isToday && <span className="status-chip danger">اليوم</span>}
-                    </div>
-                    <p>
-                      {item.bankName ? `${item.bankName}` : '—'}
-                      {item.checkNumber ? ` · شيك رقم ${item.checkNumber}` : ''}
-                    </p>
-                    <small>تاريخ التحصيل: {formatDate(item.collectionDate)}</small>
-                  </div>
-                  <div className="table-side">
-                    <strong>{formatMoney(item.amount)}</strong>
-                    <div className="row-actions">
-                      <button type="button" className="ghost-button small" onClick={() => onEdit(item)}>
-                        تعديل
-                      </button>
-                      <button type="button" className="danger-button small" onClick={() => onDelete(item.id)}>
-                        حذف
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-            {checks.items.length === 0 && (
-              <p className="empty-notice">لا توجد شيكات مسجلة بعد.</p>
-            )}
-          </div>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
-        </article>
-      </section>
-
+      {/* Check form modal */}
       <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل الشيك' : 'إضافة شيك جديد'}>
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل / الساحب</span>
-            <input name="customerName" value={form.customerName} onChange={onChange} required />
+            <select name="customerName" value={form.customerName} onChange={onChange} required>
+              <option value="">-- اختر العميل --</option>
+              {supplierOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
           </label>
           <label>
             <span>رقم الشيك</span>
@@ -2136,14 +2298,44 @@ function ChecksView({
             <span>ملاحظات</span>
             <textarea name="notes" rows="3" value={form.notes} onChange={onChange} />
           </label>
-
           <div className="form-actions full-width" style={{ marginTop: '16px' }}>
             <button type="submit" className="primary-button" disabled={saving}>
               {saving ? 'جارٍ الحفظ...' : editingId ? 'حفظ التعديل' : 'إضافة الشيك'}
             </button>
-            <button type="button" className="ghost-button" onClick={onCloseForm}>
-              إلغاء
+            <button type="button" className="ghost-button" onClick={onCloseForm}>إلغاء</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Cash form modal */}
+      <Modal isOpen={isCashFormOpen} onClose={onCloseCashForm} title={cashEditingId ? 'تعديل الدفعة النقدية' : 'إضافة دفعة نقدية'}>
+        <form className="form-grid" onSubmit={onCashSubmit}>
+          <label>
+            <span>اسم العميل</span>
+            <select name="customerName" value={cashForm.customerName} onChange={onCashChange} required>
+              <option value="">-- اختر العميل --</option>
+              {supplierOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>المبلغ المستلم</span>
+            <input name="amount" type="number" min="0" step="0.01" value={cashForm.amount} onChange={onCashChange} required />
+          </label>
+          <label>
+            <span>تاريخ الاستلام</span>
+            <input name="receiptDate" type="date" value={cashForm.receiptDate} onChange={onCashChange} required />
+          </label>
+          <label className="full-width">
+            <span>ملاحظات</span>
+            <textarea name="notes" rows="3" value={cashForm.notes} onChange={onCashChange} />
+          </label>
+          <div className="form-actions full-width" style={{ marginTop: '16px' }}>
+            <button type="submit" className="primary-button" disabled={cashSaving}>
+              {cashSaving ? 'جارٍ الحفظ...' : cashEditingId ? 'حفظ التعديل' : 'إضافة الدفعة'}
             </button>
+            <button type="button" className="ghost-button" onClick={onCloseCashForm}>إلغاء</button>
           </div>
         </form>
       </Modal>
@@ -2202,6 +2394,11 @@ function MainApp({ auth, onLogout }) {
   const [priceList, setPriceList] = useState(initialPriceList);
   const [custodies, setCustodies] = useState(initialCustodies);
   const [checks, setChecks] = useState(initialChecks);
+  const [cashReceipts, setCashReceipts] = useState(initialCashReceipts);
+  const [cashForm, setCashForm] = useState(initialCashForm);
+  const [cashEditingId, setCashEditingId] = useState('');
+  const [cashSaving, setCashSaving] = useState(false);
+  const [cashFormOpen, setCashFormOpen] = useState(false);
   const [statement, setStatement] = useState(initialStatement);
   const [salesForm, setSalesForm] = useState(initialSalesForm);
   const [salesRepProducts, setSalesRepProducts] = useState([]);
@@ -2399,6 +2596,7 @@ function MainApp({ auth, onLogout }) {
         ['/api/price-list', setPriceList],
         ['/api/custodies', setCustodies],
         ['/api/checks', setChecks],
+        ['/api/cash-receipts', setCashReceipts],
         ['/api/final-product-store', setFinalProductStore],
         ['/api/raw-materials-store', setRawMaterialsStore],
         ['/api/rep-sub-stores', setRepSubStores],
@@ -2687,6 +2885,64 @@ function MainApp({ auth, onLogout }) {
     } catch (requestError) { setError(requestError.message); }
   }
 
+  // ── Cash Receipts ───────────────────────────────────────
+  function handleCashInputChange(event) {
+    const { name, value } = event.target;
+    setCashForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function openCashForm() {
+    setCashEditingId('');
+    setCashForm(initialCashForm);
+    setCashFormOpen(true);
+  }
+
+  function startCashEdit(item) {
+    setCashEditingId(item.id);
+    setCashForm({
+      customerName: item.customerName,
+      amount: String(item.amount),
+      receiptDate: item.receiptDate || '',
+      notes: item.notes ?? ''
+    });
+    setCashFormOpen(true);
+  }
+
+  function closeCashForm() {
+    setCashFormOpen(false);
+    setCashEditingId('');
+    setCashForm(initialCashForm);
+  }
+
+  async function handleCashSubmit(event) {
+    event.preventDefault();
+    try {
+      setCashSaving(true); setError(''); setNotice('');
+      const payload = { ...cashForm, amount: Number(cashForm.amount) };
+      const url = cashEditingId ? `/api/cash-receipts/${cashEditingId}` : '/api/cash-receipts';
+      const method = cashEditingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) { throw new Error(await getApiErrorMessage(res, 'تعذر حفظ الدفعة النقدية')); }
+      const refreshed = await fetch('/api/cash-receipts'); if (refreshed.ok) setCashReceipts(await refreshed.json());
+      closeCashForm();
+      setNotice(cashEditingId ? 'تم تعديل الدفعة بنجاح.' : 'تمت إضافة الدفعة النقدية بنجاح.');
+    } catch (requestError) { setError(requestError.message); } finally { setCashSaving(false); }
+  }
+
+  function requestCashDelete(id) {
+    setDeleteTarget({ type: 'cash', id });
+  }
+
+  async function confirmCashDelete() {
+    const id = deleteTarget.id; setDeleteTarget(null);
+    try {
+      setError(''); setNotice('');
+      await fetch(`/api/cash-receipts/${id}`, { method: 'DELETE' });
+      const refreshed = await fetch('/api/cash-receipts'); if (refreshed.ok) setCashReceipts(await refreshed.json());
+      setNotice('تم حذف الدفعة النقدية بنجاح.');
+    } catch (requestError) { setError(requestError.message); }
+  }
+
   // ── Sales ──────────────────────────────────────────────
   function handleSalesInputChange(event) {
     const { name, value } = event.target;
@@ -2856,6 +3112,7 @@ function MainApp({ auth, onLogout }) {
     setReturnsEditingId(item.id);
     setReturnsForm({
       customerName: item.customerName,
+      productName: item.productName || '',
       originalInvoiceNumber: item.originalInvoiceNumber,
       amount: String(item.amount),
       reason: item.reason,
@@ -3309,6 +3566,7 @@ function MainApp({ auth, onLogout }) {
     else if (deleteTarget.type === 'custodies') confirmCustodyDelete();
     else if (deleteTarget.type === 'transaction') confirmTransactionDelete();
     else if (deleteTarget.type === 'check') confirmCheckDelete();
+    else if (deleteTarget.type === 'cash') confirmCashDelete();
     else if (deleteTarget.type === 'fp') fpCrud.confirmDelete();
     else if (deleteTarget.type === 'rm') rmCrud.confirmDelete();
     else if (deleteTarget.type === 'rss') rssCrud.confirmDelete();
@@ -3425,6 +3683,7 @@ function MainApp({ auth, onLogout }) {
     custodies: 'هل أنت متأكد من حذف العهدة؟ لا يمكن التراجع، سيتم حذف جميع الحركات المتعلقة.',
     transaction: 'هل أنت متأكد من حذف هذه الحركة؟ سيتم استرجاع رصيد العهدة كالمعاملة العكسية.',
     check: 'هل أنت متأكد من حذف هذا الشيك؟ لا يمكن التراجع عن هذا الإجراء.',
+    cash: 'هل أنت متأكد من حذف هذه الدفعة النقدية؟ لا يمكن التراجع عن هذا الإجراء.',
     fp: 'هل أنت متأكد من حذف هذا المنتج من المخزن؟ لا يمكن التراجع عن هذا الإجراء.',
     rm: 'هل أنت متأكد من حذف هذه الخامة؟ لا يمكن التراجع عن هذا الإجراء.',
     rss: 'هل أنت متأكد من حذف هذا السجل؟ لا يمكن التراجع عن هذا الإجراء.',
@@ -3467,6 +3726,9 @@ function MainApp({ auth, onLogout }) {
     : {};
   const supplierNameOptions = Array.isArray(suppliers?.items)
     ? suppliers.items.map((item) => item?.name).filter(Boolean)
+    : [];
+  const priceListProductOptions = Array.isArray(priceList?.items)
+    ? priceList.items.map((item) => item?.productName).filter(Boolean)
     : [];
   const salesRepOptions = Array.from(new Set([
     ...registeredReps.map((rep) => rep.displayName).filter(Boolean),
@@ -3617,7 +3879,7 @@ function MainApp({ auth, onLogout }) {
         ) : null}
 
         {!loading && activeView === 'dashboard' ? (
-          <DashboardView dashboard={dashboard} onNavigate={navigateTo} activeView={activeView} />
+          <DashboardView dashboard={dashboard} onNavigate={navigateTo} activeView={activeView} token={auth?.token} isAdmin={isAdmin} />
         ) : null}
 
         {!loading && activeView === 'sales' ? (
@@ -3668,6 +3930,8 @@ function MainApp({ auth, onLogout }) {
             onSubmit={handleReturnsSubmit}
             onEdit={startReturnsEdit}
             onDelete={requestReturnsDelete}
+            productOptions={priceListProductOptions}
+            supplierOptions={supplierNameOptions}
           />
         ) : null}
 
@@ -3718,6 +3982,18 @@ function MainApp({ auth, onLogout }) {
             onSubmit={handleCheckSubmit}
             onEdit={startCheckEdit}
             onDelete={requestCheckDelete}
+            cashReceipts={cashReceipts}
+            cashForm={cashForm}
+            cashEditingId={cashEditingId}
+            cashSaving={cashSaving}
+            isCashFormOpen={cashFormOpen}
+            onOpenCashForm={openCashForm}
+            onCloseCashForm={closeCashForm}
+            onCashChange={handleCashInputChange}
+            onCashSubmit={handleCashSubmit}
+            onCashEdit={startCashEdit}
+            onCashDelete={requestCashDelete}
+            supplierOptions={supplierNameOptions}
           />
         ) : null}
 
@@ -4692,8 +4968,20 @@ function MainApp({ auth, onLogout }) {
               </article>
             )}
             formFields={<>
-              <label><span>اسم العميل</span><input name="customerName" value={fsForm.customerName} onChange={fsCrud.handleInput} required /></label>
-              <label><span>اسم المنتج</span><input name="productName" value={fsForm.productName} onChange={fsCrud.handleInput} required /></label>
+              <label><span>اسم العميل</span>
+                <select name="customerName" value={fsForm.customerName} onChange={fsCrud.handleInput} required>
+                  <option value="">{supplierNameOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}</option>
+                  {supplierNameOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+                  {fsForm.customerName && !supplierNameOptions.includes(fsForm.customerName) ? <option value={fsForm.customerName}>{fsForm.customerName}</option> : null}
+                </select>
+              </label>
+              <label><span>اسم المنتج</span>
+                <select name="productName" value={fsForm.productName} onChange={fsCrud.handleInput} required>
+                  <option value="">{priceListProductOptions.length > 0 ? '— اختر منتجًا —' : 'لا يوجد منتجات مسجلة'}</option>
+                  {priceListProductOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+                  {fsForm.productName && !priceListProductOptions.includes(fsForm.productName) ? <option value={fsForm.productName}>{fsForm.productName}</option> : null}
+                </select>
+              </label>
               <label><span>الكمية</span><input name="quantity" type="number" min="1" value={fsForm.quantity} onChange={fsCrud.handleInput} /></label>
               <label><span>الوحدة</span><input name="unit" value={fsForm.unit} onChange={fsCrud.handleInput} /></label>
               <label><span>السبب</span><input name="reason" value={fsForm.reason} onChange={fsCrud.handleInput} placeholder="مثال: ترويج، تجربة.." /></label>

@@ -89,9 +89,13 @@ import {
   updateProductCardRecord,
   deleteProductCardRecord,
   transferToRep,
-  repSaleDeduct
+  repSaleDeduct,
+  getCashReceiptsData,
+  createCashReceiptRecord,
+  updateCashReceiptRecord,
+  deleteCashReceiptRecord
 } from './data/erbStore.js';
-import { getDatabaseStatus, safeQuery } from './db.js';
+import { getDatabaseStatus, safeQuery, getCurrentMode, switchMode } from './db.js';
 import { createSwaggerSpec } from './swagger.js';
 import bcrypt from 'bcryptjs';
 import { getAllUsers, getUserByUsername, getUserById, createUser, updateUser, deleteUser, ROLES, ROLE_LABELS, ROLE_PAGES, getAllRoles, createRole, updateRole, deleteRole, ALL_PAGES, getRolePagesById } from './data/users.js';
@@ -231,6 +235,19 @@ app.get('/api/health', async (_request, response) => {
     message: databaseStatus.message,
     time: databaseStatus.time
   });
+});
+
+app.get('/api/db-mode', authMiddleware, (_req, res) => {
+  res.json({ mode: getCurrentMode() });
+});
+
+app.post('/api/db-mode', authMiddleware, adminOnly, (req, res) => {
+  const { mode } = req.body;
+  if (!['local', 'cloud'].includes(mode)) {
+    return res.status(400).json({ message: 'وضع غير صالح. اختر local أو cloud.' });
+  }
+  switchMode(mode);
+  res.json({ mode: getCurrentMode() });
 });
 
 app.get('/api/dashboard', async (_request, response) => {
@@ -668,6 +685,37 @@ app.delete('/api/checks/:id', async (request, response) => {
   } catch (err) {
     response.status(500).json({ message: err.message });
   }
+});
+
+// ── Cash Receipts ──────────────────────────────────────────────────
+app.get('/api/cash-receipts', async (_req, res) => { try { res.json(await getCashReceiptsData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+app.post('/api/cash-receipts', async (req, res) => {
+  const { customerName, amount, receiptDate } = req.body ?? {};
+  if (!customerName) { res.status(400).json({ message: 'يرجى إدخال اسم العميل.' }); return; }
+  if (Number(amount) <= 0) { res.status(400).json({ message: 'قيمة المبلغ يجب أن تكون أكبر من صفر.' }); return; }
+  if (!receiptDate) { res.status(400).json({ message: 'يرجى تحديد تاريخ السداد.' }); return; }
+  try { res.status(201).json(await createCashReceiptRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.put('/api/cash-receipts/:id', async (req, res) => {
+  const { customerName, amount, receiptDate } = req.body ?? {};
+  if (!customerName) { res.status(400).json({ message: 'يرجى إدخال اسم العميل.' }); return; }
+  if (Number(amount) <= 0) { res.status(400).json({ message: 'قيمة المبلغ يجب أن تكون أكبر من صفر.' }); return; }
+  if (!receiptDate) { res.status(400).json({ message: 'يرجى تحديد تاريخ السداد.' }); return; }
+  try {
+    const updated = await updateCashReceiptRecord(req.params.id, req.body);
+    if (!updated) { res.status(404).json({ message: 'السجل غير موجود.' }); return; }
+    res.json(updated);
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.delete('/api/cash-receipts/:id', async (req, res) => {
+  try {
+    const deleted = await deleteCashReceiptRecord(req.params.id);
+    if (!deleted) { res.status(404).json({ message: 'السجل غير موجود.' }); return; }
+    res.status(204).send();
+  } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
 // ── Final Product Store ──────────────────────────────────────────────────────
