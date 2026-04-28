@@ -1,6 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 
+// ─── API URL (for production and dev) ─────────────────────────────
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+// Global fetch wrapper: rewrite requests that start with `/api` to the full API_URL.
+// This lets the app keep using relative `/api/...` paths while deployed.
+try {
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    try {
+      if (typeof input === 'string') {
+        if (input.startsWith('/api')) {
+          input = `${API_URL}${input}`;
+        }
+      } else if (input instanceof Request) {
+        const url = new URL(input.url, window.location.origin);
+        if (url.pathname.startsWith('/api')) {
+          input = new Request(`${API_URL}${url.pathname}${url.search}`, input);
+        }
+      }
+    } catch (e) {
+      // ignore and fallback to original input
+    }
+    return _origFetch(input, init);
+  };
+} catch (e) {
+  // window.fetch may not be available in some non-browser environments
+}
+
 // ─── Auth helpers ────────────────────────────────────────────────
 function getStoredAuth() {
   try {
@@ -82,7 +110,7 @@ function LoginScreen({ onLogin }) {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -137,7 +165,7 @@ function UsersPage({ token }) {
   }
 
   async function load() {
-    const r = await fetch('/api/users', { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch(`${API_URL}/users`, { headers: { Authorization: `Bearer ${token}` } });
     if (r.ok) { const d = await r.json(); setUsers(d.users); setRoles(d.roles); }
   }
 
@@ -154,7 +182,7 @@ function UsersPage({ token }) {
         : { username: form.username, password: form.password, displayName: form.displayName, code: form.code, role: form.role };
       const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
       const method = editingUser ? 'PUT' : 'POST';
-      const res = await fetch(url, { method, headers: authHeaders(token), body: JSON.stringify(payload) });
+      const res = await fetch(`${API_URL}${url.replace('/api', '')}`, { method, headers: authHeaders(token), body: JSON.stringify(payload) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data.message || 'خطأ'); return; }
       await load(); setFormOpen(false);
@@ -164,7 +192,7 @@ function UsersPage({ token }) {
 
   async function handleDelete(id) {
     setDeleteTarget(null);
-    const res = await fetch(`/api/users/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/users/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
     if (res.ok || res.status === 204) { await load(); showNotice('تم حذف المستخدم.'); }
     else { const d = await res.json().catch(() => ({})); setError(d.message || 'خطأ في الحذف'); }
   }
@@ -247,7 +275,7 @@ function RepsPage({ token }) {
   }
 
   async function load() {
-    const response = await fetch('/api/reps', { headers: { Authorization: `Bearer ${token}` } });
+    const response = await fetch(`${API_URL}/reps`, { headers: { Authorization: `Bearer ${token}` } });
     if (response.ok) {
       setReps(await response.json());
       return;
@@ -282,7 +310,7 @@ function RepsPage({ token }) {
         : { username: form.username, password: form.password, displayName: form.displayName, code: form.code };
       const url = editingRep ? `/api/reps/${editingRep.id}` : '/api/reps';
       const method = editingRep ? 'PUT' : 'POST';
-      const response = await fetch(url, { method, headers: authHeaders(token), body: JSON.stringify(payload) });
+      const response = await fetch(`${API_URL}${url.replace('/api', '')}`, { method, headers: authHeaders(token), body: JSON.stringify(payload) });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         setError(data.message || 'تعذر حفظ المندوب.');
@@ -300,7 +328,7 @@ function RepsPage({ token }) {
 
   async function handleDelete(id) {
     setDeleteTarget(null);
-    const response = await fetch(`/api/reps/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    const response = await fetch(`${API_URL}/reps/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
     if (response.ok || response.status === 204) {
       await load();
       showNotice('تم حذف المندوب.');
@@ -398,7 +426,7 @@ function RolesPage({ token }) {
   }
 
   async function load(keepSelected) {
-    const r = await fetch('/api/roles', { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch(`${API_URL}/roles`, { headers: { Authorization: `Bearer ${token}` } });
     if (!r.ok) return;
     const d = await r.json();
     setRoles(d.roles);
@@ -438,7 +466,7 @@ function RolesPage({ token }) {
   async function handleSave() {
     setSaving(true); setSaveError('');
     try {
-      const res = await fetch(`/api/roles/${selectedRoleId}`, {
+      const res = await fetch(`${API_URL}/roles/${selectedRoleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ label: localLabel, pages: localPages }),
@@ -454,7 +482,7 @@ function RolesPage({ token }) {
   async function handleCreateRole(e) {
     e.preventDefault(); setNewSaving(true); setNewError('');
     try {
-      const res = await fetch('/api/roles', {
+      const res = await fetch(`${API_URL}/roles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(newForm),
@@ -473,7 +501,7 @@ function RolesPage({ token }) {
 
   async function handleDeleteRole() {
     const id = deleteTarget; setDeleteTarget(null);
-    const res = await fetch(`/api/roles/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/roles/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
     if (res.ok || res.status === 204) {
       showNotice('تم حذف الدور.');
       setSelectedRoleId(''); setLocalPages([]); setLocalLabel('');
@@ -1351,7 +1379,7 @@ function DbModeSwitch({ token }) {
   const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
-    fetch('/api/db-mode', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_URL}/db-mode`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data?.mode) setMode(data.mode); })
       .catch(() => {});
@@ -1361,7 +1389,7 @@ function DbModeSwitch({ token }) {
     const next = mode === 'local' ? 'cloud' : 'local';
     setSwitching(true);
     try {
-      const r = await fetch('/api/db-mode', {
+      const r = await fetch(`${API_URL}/db-mode`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ mode: next })
@@ -2687,7 +2715,7 @@ function MainApp({ auth, onLogout }) {
       return;
     }
     try {
-      const res = await fetch('/api/users/options', { headers: { Authorization: `Bearer ${auth.token}` } });
+      const res = await fetch(`${API_URL}/users/options`, { headers: { Authorization: `Bearer ${auth.token}` } });
       if (!res.ok) return;
       const data = await res.json();
       setEmployeeUsers(
@@ -2727,12 +2755,12 @@ function MainApp({ auth, onLogout }) {
         ['/api/product-cards', setProductCards],
       ];
       // Load reps separately (flat array, not {overview,items})
-      fetch('/api/reps', { headers: { Authorization: `Bearer ${auth?.token}` } })
+      fetch(`${API_URL}/reps`, { headers: { Authorization: `Bearer ${auth?.token}` } })
         .then(r => r.ok ? r.json() : [])
         .then(data => setRegisteredReps(Array.isArray(data) ? data : []))
         .catch(() => {});
       await Promise.all(pairs.map(async ([url, setter]) => {
-        try { const r = await fetch(url); if (r.ok) setter(await r.json()); } catch { /* ignore individual failures */ }
+        try { const r = await fetch(`${API_URL}${url.replace('/api', '')}`); if (r.ok) setter(await r.json()); } catch { /* ignore individual failures */ }
       }));
     } catch { setError('تعذر تحميل البيانات من الخادم.'); } finally { setLoading(false); }
   }
@@ -2976,11 +3004,11 @@ function MainApp({ auth, onLogout }) {
     try {
       setCheckSaving(true); setError(''); setNotice('');
       const payload = { ...checkForm, amount: Number(checkForm.amount) };
-      const url = checkEditingId ? `/api/checks/${checkEditingId}` : '/api/checks';
+      const url = checkEditingId ? `${API_URL}/checks/${checkEditingId}` : `${API_URL}/checks`;
       const method = checkEditingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!res.ok) { throw new Error(await getApiErrorMessage(res, 'تعذر حفظ الشيك')); }
-      const refreshed = await fetch('/api/checks'); if (refreshed.ok) setChecks(await refreshed.json());
+      const refreshed = await fetch(`${API_URL}/checks`); if (refreshed.ok) setChecks(await refreshed.json());
       closeCheckForm();
       setNotice(checkEditingId ? 'تم تعديل الشيك بنجاح.' : 'تمت إضافة الشيك بنجاح.');
     } catch (requestError) { setError(requestError.message); } finally { setCheckSaving(false); }
@@ -2994,8 +3022,8 @@ function MainApp({ auth, onLogout }) {
     const id = deleteTarget.id; setDeleteTarget(null);
     try {
       setError(''); setNotice('');
-      await fetch(`/api/checks/${id}`, { method: 'DELETE' });
-      const refreshed = await fetch('/api/checks'); if (refreshed.ok) setChecks(await refreshed.json());
+      await fetch(`${API_URL}/checks/${id}`, { method: 'DELETE' });
+      const refreshed = await fetch(`${API_URL}/checks`); if (refreshed.ok) setChecks(await refreshed.json());
       setNotice('تم حذف الشيك بنجاح.');
     } catch (requestError) { setError(requestError.message); }
   }
@@ -3430,8 +3458,8 @@ function MainApp({ auth, onLogout }) {
     const id = deleteTarget.id; setDeleteTarget(null);
     try {
       setError(''); setNotice('');
-      await fetch(`/api/custodies/${id}`, { method: 'DELETE' });
-      const refreshed = await fetch('/api/custodies'); if (refreshed.ok) setCustodies(await refreshed.json());
+      await fetch(`${API_URL}/custodies/${id}`, { method: 'DELETE' });
+      const refreshed = await fetch(`${API_URL}/custodies`); if (refreshed.ok) setCustodies(await refreshed.json());
       setNotice('تم حذف العهدة بنجاح.');
     } catch (requestError) { setError(requestError.message); }
   }
@@ -3440,7 +3468,7 @@ function MainApp({ auth, onLogout }) {
     setActiveCustodyId(id);
     setError('');
     try {
-      const res = await fetch(`/api/custodies/${id}/transactions`);
+      const res = await fetch(`${API_URL}/custodies/${id}/transactions`);
       setActiveCustodyTransactions(res.ok ? await res.json() : []);
     } catch { setActiveCustodyTransactions([]); }
     setTransactionsModalOpen(true);
@@ -3484,11 +3512,11 @@ function MainApp({ auth, onLogout }) {
     try {
       setTransactionSaving(true); setError(''); setNotice('');
       const payload = { ...transactionForm, amount: Number(transactionForm.amount) };
-      const res = await fetch(`/api/custodies/${activeCustodyId}/transactions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetch(`${API_URL}/custodies/${activeCustodyId}/transactions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!res.ok) { throw new Error(await getApiErrorMessage(res, 'تعذر تسجيل الحركة')); }
-      const txRes = await fetch(`/api/custodies/${activeCustodyId}/transactions`);
+      const txRes = await fetch(`${API_URL}/custodies/${activeCustodyId}/transactions`);
       if (txRes.ok) setActiveCustodyTransactions(await txRes.json());
-      const custRes = await fetch('/api/custodies'); if (custRes.ok) setCustodies(await custRes.json());
+      const custRes = await fetch(`${API_URL}/custodies`); if (custRes.ok) setCustodies(await custRes.json());
       setNotice('تم تسجيل الحركة بنجاح.');
       setTransactionForm(initialTransactionForm);
     } catch (requestError) { setError(requestError.message); } finally { setTransactionSaving(false); }
