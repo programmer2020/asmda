@@ -913,7 +913,7 @@ const initialMachinePurchaseForm = { supplierName: '', description: '', amount: 
 const initialMiscPurchaseForm = { description: '', amount: '', category: '', purchaseDate: '', receiptNumber: '', notes: '' };
 const initialPayrollAdvanceForm = { employeeName: '', type: 'راتب', amount: '', month: '', status: 'معلق', notes: '' };
 const initialPaymentAlertForm = { customerName: '', amount: '', dueDate: '', alertType: 'فاتورة آجل', status: 'قادم', notes: '' };
-const initialFreeSampleForm = { customerName: '', productName: '', quantity: '1', unit: 'قطعة', reason: '', sampleDate: '', notes: '' };
+const initialFreeSampleForm = { customerName: '', productName: '', quantity: '1', unit: 'قطعة', unitPrice: '', reason: '', sampleDate: '', notes: '' };
 
 const initialSalesForm = {
   customerName: '',
@@ -4984,6 +4984,7 @@ function MainApp({ auth, onLogout }) {
               </label>
               <label><span>الكمية</span><input name="quantity" type="number" min="1" value={fsForm.quantity} onChange={fsCrud.handleInput} /></label>
               <label><span>الوحدة</span><input name="unit" value={fsForm.unit} onChange={fsCrud.handleInput} /></label>
+              <label><span>سعر الوحدة (للتوثيق فقط)</span><input name="unitPrice" type="number" min="0" step="0.01" value={fsForm.unitPrice} onChange={fsCrud.handleInput} placeholder="0.00" /></label>
               <label><span>السبب</span><input name="reason" value={fsForm.reason} onChange={fsCrud.handleInput} placeholder="مثال: ترويج، تجربة.." /></label>
               <label><span>التاريخ</span><input name="sampleDate" type="date" value={fsForm.sampleDate} onChange={fsCrud.handleInput} /></label>
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={fsForm.notes} onChange={fsCrud.handleInput} /></label>
