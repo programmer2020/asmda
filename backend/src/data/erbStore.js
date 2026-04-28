@@ -28,6 +28,10 @@ function mapCreditSale(row) {
     id: row.id,
     customerName: row.customer_name,
     invoiceNumber: row.invoice_number,
+    items: Array.isArray(row.items) ? row.items : [],
+    discountType: row.discount_type || 'fixed',
+    discountValue: Number(row.discount_value || 0),
+    discountAmount: Number(row.discount_amount || 0),
     amount: Number(row.amount),
     paidAmount: Number(row.paid_amount),
     remainingAmount: Math.max(0, Number(row.amount) - Number(row.paid_amount)),
@@ -302,16 +306,24 @@ export async function deleteSalesRecord(id) {
 
 export async function createCreditSalesRecord(payload) {
   const id = await nextId('CRD', 'installment_sales');
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const discountType = payload.discountType || 'fixed';
+  const discountValue = Number(payload.discountValue || 0);
+  const discountAmount = Number(payload.discountAmount || 0);
 
   const text = `
     INSERT INTO installment_sales 
-    (id, customer_name, invoice_number, amount, paid_amount, due_date, status, sales_rep, notes) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *
+    (id, customer_name, invoice_number, items, discount_type, discount_value, discount_amount, amount, paid_amount, due_date, status, sales_rep, notes) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *
   `;
   const values = [
     id,
     payload.customerName || '',
     payload.invoiceNumber || '',
+    JSON.stringify(items),
+    discountType,
+    discountValue,
+    discountAmount,
     Number(payload.amount || 0),
     Number(payload.paidAmount || 0),
     payload.dueDate || null,
@@ -325,22 +337,31 @@ export async function createCreditSalesRecord(payload) {
 }
 
 export async function updateCreditSalesRecord(id, payload) {
+  const items = Array.isArray(payload.items) ? JSON.stringify(payload.items) : undefined;
   const text = `
     UPDATE installment_sales SET 
       customer_name = COALESCE($2, customer_name),
       invoice_number = COALESCE($3, invoice_number),
-      amount = COALESCE($4, amount),
-      paid_amount = COALESCE($5, paid_amount),
-      due_date = COALESCE($6, due_date),
-      status = COALESCE($7, status),
-      sales_rep = COALESCE($8, sales_rep),
-      notes = COALESCE($9, notes)
+      items = COALESCE($4, items),
+      discount_type = COALESCE($5, discount_type),
+      discount_value = COALESCE($6, discount_value),
+      discount_amount = COALESCE($7, discount_amount),
+      amount = COALESCE($8, amount),
+      paid_amount = COALESCE($9, paid_amount),
+      due_date = COALESCE($10, due_date),
+      status = COALESCE($11, status),
+      sales_rep = COALESCE($12, sales_rep),
+      notes = COALESCE($13, notes)
     WHERE id = $1 RETURNING *
   `;
   const values = [
     id,
     payload.customerName,
     payload.invoiceNumber,
+    items,
+    payload.discountType,
+    payload.discountValue !== undefined ? Number(payload.discountValue) : undefined,
+    payload.discountAmount !== undefined ? Number(payload.discountAmount) : undefined,
     payload.amount !== undefined ? Number(payload.amount) : undefined,
     payload.paidAmount !== undefined ? Number(payload.paidAmount) : undefined,
     payload.dueDate,

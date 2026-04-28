@@ -928,7 +928,9 @@ const initialSalesForm = {
 const initialCreditForm = {
   customerName: '',
   invoiceNumber: '',
-  amount: '',
+  items: [{ productName: '', qty: '1', unitPrice: '', lineTotal: 0 }],
+  discountType: 'fixed',
+  discountValue: '',
   paidAmount: '',
   status: 'مستحقة',
   salesRep: '',
@@ -1648,10 +1650,23 @@ function CreditSalesView({
   onChange,
   onSubmit,
   onEdit,
-  onDelete
+  onDelete,
+  priceList = { items: [] },
+  supplierOptions = [],
+  onItemAdd,
+  onItemRemove,
+  onItemChange
 }) {
   const reversedItems = [...(creditSales.items || [])].reverse();
   const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
+
+  const formItems = form.items || [{ productName: '', qty: '1', unitPrice: '', lineTotal: 0 }];
+  const subtotal = formItems.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
+  const discountAmt = form.discountType === 'percent'
+    ? subtotal * Number(form.discountValue || 0) / 100
+    : Number(form.discountValue || 0);
+  const total = Math.max(0, subtotal - discountAmt);
+
   return (
     <>
       <SummaryCards items={creditSales.overview} />
@@ -1676,7 +1691,10 @@ function CreditSalesView({
                     <strong>{item.customerName}</strong>
                     <span className={`status-chip ${getStatusTone(item.status)}`}>{item.status}</span>
                   </div>
-                  <p>{item.invoiceNumber}</p>
+                  <p>
+                    {item.invoiceNumber}
+                    {Array.isArray(item.items) && item.items.length > 0 ? ` · ${item.items.length} صنف` : ''}
+                  </p>
                   <small>
                     {item.salesRep} - استحقاق {formatDate(item.dueDate)}
                   </small>
@@ -1703,16 +1721,108 @@ function CreditSalesView({
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل</span>
-            <input name="customerName" value={form.customerName} onChange={onChange} />
+            <select name="customerName" value={form.customerName} onChange={onChange}>
+              <option value="">{supplierOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}</option>
+              {supplierOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+              {form.customerName && !supplierOptions.includes(form.customerName) ? <option value={form.customerName}>{form.customerName}</option> : null}
+            </select>
           </label>
           <label>
             <span>رقم الفاتورة</span>
             <input name="invoiceNumber" value={form.invoiceNumber} onChange={onChange} />
           </label>
+
+          {/* ── أصناف الفاتورة ── */}
+          <div className="full-width" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ background: '#f1f5f9', textAlign: 'right' }}>
+                  <th style={{ padding: '8px 10px' }}>الصنف</th>
+                  <th style={{ padding: '8px 10px', width: '80px' }}>الكمية</th>
+                  <th style={{ padding: '8px 10px', width: '120px' }}>سعر الوحدة</th>
+                  <th style={{ padding: '8px 10px', width: '110px', textAlign: 'left' }}>الإجمالي</th>
+                  <th style={{ padding: '8px 6px', width: '32px' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {formItems.map((it, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '6px 10px' }}>
+                      <select
+                        value={it.productName}
+                        onChange={(e) => onItemChange(i, 'productName', e.target.value)}
+                        style={{ width: '100%' }}
+                      >
+                        <option value="">— اختر الصنف —</option>
+                        {(priceList.items || []).map((p) => (
+                          <option key={p.productName} value={p.productName}>{p.productName}</option>
+                        ))}
+                        {it.productName && !(priceList.items || []).find((p) => p.productName === it.productName)
+                          ? <option value={it.productName}>{it.productName}</option> : null}
+                      </select>
+                    </td>
+                    <td style={{ padding: '6px 10px' }}>
+                      <input
+                        type="number" min="1" value={it.qty}
+                        onChange={(e) => onItemChange(i, 'qty', e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                    </td>
+                    <td style={{ padding: '6px 10px' }}>
+                      <input
+                        type="number" min="0" step="0.01" value={it.unitPrice}
+                        onChange={(e) => onItemChange(i, 'unitPrice', e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                    </td>
+                    <td style={{ padding: '6px 10px', textAlign: 'left' }}>
+                      {formatMoney(Number(it.qty || 0) * Number(it.unitPrice || 0))}
+                    </td>
+                    <td style={{ padding: '6px', textAlign: 'center' }}>
+                      {formItems.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => onItemRemove(i)}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}
+                        >×</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button type="button" className="ghost-button small" onClick={onItemAdd} style={{ marginTop: '8px' }}>
+              + إضافة صنف
+            </button>
+          </div>
+
+          {/* ── خصم ── */}
           <label>
-            <span>إجمالي المبلغ</span>
-            <input name="amount" type="number" min="0" value={form.amount} onChange={onChange} />
+            <span>نوع الخصم</span>
+            <select name="discountType" value={form.discountType} onChange={onChange}>
+              <option value="fixed">مبلغ ثابت (جنيه)</option>
+              <option value="percent">نسبة مئوية (%)</option>
+            </select>
           </label>
+          <label>
+            <span>قيمة الخصم</span>
+            <input name="discountValue" type="number" min="0" step="0.01" value={form.discountValue} onChange={onChange} placeholder="0" />
+          </label>
+
+          {/* ── ملخص المبالغ ── */}
+          <div className="full-width" style={{ background: '#f8fafc', borderRadius: '8px', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.95rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>المجموع الفرعي</span><strong>{formatMoney(subtotal)}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+              <span>الخصم{form.discountType === 'percent' ? ` (${form.discountValue || 0}%)` : ''}</span>
+              <strong>- {formatMoney(discountAmt)}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '6px', fontWeight: 700, fontSize: '1.05rem' }}>
+              <span>الإجمالي النهائي</span><strong>{formatMoney(total)}</strong>
+            </div>
+          </div>
+
           <label>
             <span>المبلغ المسدد</span>
             <input name="paidAmount" type="number" min="0" value={form.paidAmount} onChange={onChange} />
@@ -1737,7 +1847,7 @@ function CreditSalesView({
           </label>
           <label className="full-width">
             <span>ملاحظات</span>
-            <textarea name="notes" rows="4" value={form.notes} onChange={onChange} />
+            <textarea name="notes" rows="3" value={form.notes} onChange={onChange} />
           </label>
 
           <div className="form-actions full-width" style={{ marginTop: '16px' }}>
@@ -3040,6 +3150,28 @@ function MainApp({ auth, onLogout }) {
     setCreditForm((current) => ({ ...current, [name]: value }));
   }
 
+  function handleCreditAddItem() {
+    setCreditForm((f) => ({ ...f, items: [...(f.items || []), { productName: '', qty: '1', unitPrice: '', lineTotal: 0 }] }));
+  }
+
+  function handleCreditRemoveItem(index) {
+    setCreditForm((f) => ({ ...f, items: (f.items || []).filter((_, i) => i !== index) }));
+  }
+
+  function handleCreditItemChange(index, field, value) {
+    setCreditForm((f) => {
+      const items = [...(f.items || [])];
+      const updated = { ...items[index], [field]: value };
+      if (field === 'productName') {
+        const pl = (priceList?.items || []).find((p) => p.productName === value);
+        updated.unitPrice = pl ? String(pl.sellingPrice) : '';
+      }
+      updated.lineTotal = Number(updated.qty || 0) * Number(updated.unitPrice || 0);
+      items[index] = updated;
+      return { ...f, items };
+    });
+  }
+
   function openCreditForm() {
     setCreditEditingId('');
     setCreditForm(initialCreditForm);
@@ -3051,7 +3183,11 @@ function MainApp({ auth, onLogout }) {
     setCreditForm({
       customerName: item.customerName,
       invoiceNumber: item.invoiceNumber,
-      amount: String(item.amount),
+      items: Array.isArray(item.items) && item.items.length > 0
+        ? item.items.map((it) => ({ ...it, qty: String(it.qty), unitPrice: String(it.unitPrice) }))
+        : [{ productName: '', qty: '1', unitPrice: String(item.amount), lineTotal: item.amount }],
+      discountType: item.discountType || 'fixed',
+      discountValue: String(item.discountValue || ''),
       paidAmount: String(item.paidAmount),
       status: item.status,
       salesRep: item.salesRep,
@@ -3071,7 +3207,20 @@ function MainApp({ auth, onLogout }) {
     event.preventDefault();
     try {
       setCreditSaving(true); setError(''); setNotice('');
-      const payload = { ...creditForm, amount: Number(creditForm.amount), paidAmount: Number(creditForm.paidAmount) };
+      const formItems = creditForm.items || [];
+      const subtotal = formItems.reduce((s, it) => s + Number(it.qty || 0) * Number(it.unitPrice || 0), 0);
+      const discountAmt = creditForm.discountType === 'percent'
+        ? subtotal * Number(creditForm.discountValue || 0) / 100
+        : Number(creditForm.discountValue || 0);
+      const total = Math.max(0, subtotal - discountAmt);
+      const payload = {
+        ...creditForm,
+        amount: total,
+        discountAmount: discountAmt,
+        discountValue: Number(creditForm.discountValue || 0),
+        paidAmount: Number(creditForm.paidAmount || 0),
+        items: formItems.map((it) => ({ ...it, qty: Number(it.qty || 0), unitPrice: Number(it.unitPrice || 0), lineTotal: Number(it.qty || 0) * Number(it.unitPrice || 0) }))
+      };
       const url = creditEditingId ? `/api/credit-sales/${creditEditingId}` : '/api/credit-sales';
       const method = creditEditingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -3914,6 +4063,11 @@ function MainApp({ auth, onLogout }) {
             onSubmit={handleCreditSubmit}
             onEdit={startCreditEdit}
             onDelete={requestCreditDelete}
+            priceList={priceList}
+            supplierOptions={supplierNameOptions}
+            onItemAdd={handleCreditAddItem}
+            onItemRemove={handleCreditRemoveItem}
+            onItemChange={handleCreditItemChange}
           />
         ) : null}
 
