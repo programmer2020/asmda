@@ -1653,6 +1653,7 @@ function CreditSalesView({
   onDelete,
   priceList = { items: [] },
   supplierOptions = [],
+  salesRepOptions = [],
   onItemAdd,
   onItemRemove,
   onItemChange
@@ -1839,7 +1840,11 @@ function CreditSalesView({
           </label>
           <label>
             <span>مسؤول المبيعات</span>
-            <input name="salesRep" value={form.salesRep} onChange={onChange} />
+            <select name="salesRep" value={form.salesRep} onChange={onChange}>
+              <option value="">{salesRepOptions.length > 0 ? '— اختر مندوب المبيعات —' : 'لا يوجد مندوبون مسجلون'}</option>
+              {salesRepOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+              {form.salesRep && !salesRepOptions.includes(form.salesRep) ? <option value={form.salesRep}>{form.salesRep}</option> : null}
+            </select>
           </label>
           <label className="full-width">
             <span>تاريخ الاستحقاق</span>
@@ -4065,6 +4070,7 @@ function MainApp({ auth, onLogout }) {
             onDelete={requestCreditDelete}
             priceList={priceList}
             supplierOptions={supplierNameOptions}
+            salesRepOptions={salesRepOptions}
             onItemAdd={handleCreditAddItem}
             onItemRemove={handleCreditRemoveItem}
             onItemChange={handleCreditItemChange}
