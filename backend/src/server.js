@@ -145,9 +145,17 @@ const isAllowedOrigin = (origin) => {
 const isVercel = !!process.env.VERCEL;
 const swaggerSpec = createSwaggerSpec(isVercel ? '' : `http://localhost:${port}`);
 
-// Temporary: allow all origins to bypass CORS errors during testing/deploy.
-// NOTE: revert this to restrictive settings after verification.
-const corsOptions = { origin: true };
+// Restrictive CORS: allow only allowedOrigins (GitHub Pages, local dev)
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || isAllowedOrigin(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+};
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
