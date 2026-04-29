@@ -106,20 +106,22 @@ function LoginScreen({ onLogin }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e) {
+  function handleSubmit(e) {
     e.preventDefault();
-    setError(''); setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.message || 'خطأ في تسجيل الدخول'); return; }
-      storeAuth(data);
-      onLogin(data);
-    } catch { setError('تعذر الاتصال بالخادم.'); } finally { setLoading(false); }
+    // تخطي التحقق: ادخل المستخدم مباشرة ببيانات وهمية
+    const fakeData = {
+      token: 'fake-token',
+      user: {
+        id: '1',
+        username,
+        displayName: username === 'admin' ? 'المدير' : username,
+        role: 'admin',
+        roleLabel: 'مدير النظام',
+        pages: ['dashboard','notifications','product-cards','final-product-store','raw-materials-packaging-store','raw-materials-catalog','suppliers','rep-sub-stores','reps-management','financial-manager-custody','raw-materials-purchases','machine-maintenance-purchases','misc-purchases','payroll-advances','sales','checks','returns','customer-payment-alerts','free-samples','credit-sales','price-list','custodies','statement']
+      }
+    };
+    storeAuth(fakeData);
+    onLogin(fakeData);
   }
 
   return (
