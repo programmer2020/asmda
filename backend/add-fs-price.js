@@ -1,7 +1,10 @@
 import pg from 'pg';
 const pool = new pg.Pool({
-  connectionString: 'postgresql://neondb_owner:npg_ZfmuYvSP41Xt@ep-billowing-sound-anzg12ng-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require',
-  ssl: { rejectUnauthorized: false }
+  host: 'localhost',
+  port: 5432,
+  database: 'asmdaproje_db',
+  user: 'postgres',
+  password: 'postgres'
 });
 pool.query(`
   CREATE TABLE IF NOT EXISTS free_samples (

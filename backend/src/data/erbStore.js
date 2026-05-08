@@ -1328,13 +1328,6 @@ export async function deleteRawPurchaseRecord(id) {
 
 // ── Raw Materials Catalog (Names) ─────────────────────────────────────────────
 
-let rawMaterialsCatalogStore = [];
-let suppliersCatalogStore = [];
-
-function nextCatalogId(prefix) {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-}
-
 function mapCatalogItem(row) {
   return {
     id: row.id,
@@ -1344,8 +1337,13 @@ function mapCatalogItem(row) {
   };
 }
 
+function nextCatalogId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+}
+
 export async function getRawMaterialsCatalogData() {
-  const items = rawMaterialsCatalogStore.map(mapCatalogItem);
+  const result = await query('SELECT * FROM raw_materials_catalog ORDER BY created_at DESC');
+  const items = result.rows.map(mapCatalogItem);
   const overview = [
     { id: 'rmc-count', label: 'عدد الخامات', value: items.length, type: 'number', helper: 'خامة مسجلة', tone: 'calm' }
   ];
@@ -1355,39 +1353,49 @@ export async function getRawMaterialsCatalogData() {
 export async function createRawMaterialsCatalogRecord(payload) {
   const name = String(payload.name || '').trim();
   if (!name) throw new Error('يرجى إدخال اسم الخامة.');
-  const exists = rawMaterialsCatalogStore.some((item) => item.name.trim() === name);
-  if (exists) throw new Error('اسم الخامة مسجل بالفعل.');
-  const created = { id: nextCatalogId('RMC'), name, category: payload.category || '', notes: payload.notes || '' };
-  rawMaterialsCatalogStore.unshift(created);
-  return mapCatalogItem(created);
+  const id = nextCatalogId('RMC');
+  try {
+    const result = await query(
+      'INSERT INTO raw_materials_catalog (id, name, category, notes) VALUES ($1,$2,$3,$4) RETURNING *',
+      [id, name, payload.category || '', payload.notes || '']
+    );
+    return mapCatalogItem(result.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') throw new Error('اسم الخامة مسجل بالفعل.');
+    throw e;
+  }
 }
 
 export async function updateRawMaterialsCatalogRecord(id, payload) {
-  const idx = rawMaterialsCatalogStore.findIndex((item) => item.id === id);
-  if (idx === -1) return null;
-  const nextName = payload.name !== undefined ? String(payload.name).trim() : rawMaterialsCatalogStore[idx].name;
-  if (!nextName) throw new Error('يرجى إدخال اسم الخامة.');
-  const duplicated = rawMaterialsCatalogStore.some((item) => item.id !== id && item.name.trim() === nextName);
-  if (duplicated) throw new Error('اسم الخامة مسجل بالفعل.');
-  rawMaterialsCatalogStore[idx] = {
-    ...rawMaterialsCatalogStore[idx],
-    name: nextName,
-    category: payload.category !== undefined ? payload.category : rawMaterialsCatalogStore[idx].category,
-    notes: payload.notes !== undefined ? payload.notes : rawMaterialsCatalogStore[idx].notes
-  };
-  return mapCatalogItem(rawMaterialsCatalogStore[idx]);
+  const name = payload.name !== undefined ? String(payload.name).trim() : undefined;
+  if (name !== undefined && !name) throw new Error('يرجى إدخال اسم الخامة.');
+  try {
+    const result = await query(
+      `UPDATE raw_materials_catalog SET
+        name = COALESCE($2, name),
+        category = COALESCE($3, category),
+        notes = COALESCE($4, notes)
+       WHERE id = $1 RETURNING *`,
+      [id, name, payload.category, payload.notes]
+    );
+    if (result.rows.length === 0) return null;
+    return mapCatalogItem(result.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') throw new Error('اسم الخامة مسجل بالفعل.');
+    throw e;
+  }
 }
 
 export async function deleteRawMaterialsCatalogRecord(id) {
-  const before = rawMaterialsCatalogStore.length;
-  rawMaterialsCatalogStore = rawMaterialsCatalogStore.filter((item) => item.id !== id);
-  return rawMaterialsCatalogStore.length < before;
+  const result = await query('DELETE FROM raw_materials_catalog WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
 }
 
 // ── Suppliers Catalog (Names) ─────────────────────────────────────────────────
 
 export async function getSuppliersData() {
-  const items = suppliersCatalogStore.map(mapCatalogItem);
+  const result = await query('SELECT * FROM suppliers_catalog ORDER BY created_at DESC');
+  const items = result.rows.map(mapCatalogItem);
   const overview = [
     { id: 'sup-count', label: 'عدد الموردين', value: items.length, type: 'number', helper: 'مورد مسجل', tone: 'calm' }
   ];
@@ -1397,32 +1405,41 @@ export async function getSuppliersData() {
 export async function createSupplierRecord(payload) {
   const name = String(payload.name || '').trim();
   if (!name) throw new Error('يرجى إدخال اسم المورد.');
-  const exists = suppliersCatalogStore.some((item) => item.name.trim() === name);
-  if (exists) throw new Error('اسم المورد مسجل بالفعل.');
-  const created = { id: nextCatalogId('SUP'), name, notes: payload.notes || '' };
-  suppliersCatalogStore.unshift(created);
-  return mapCatalogItem(created);
+  const id = nextCatalogId('SUP');
+  try {
+    const result = await query(
+      'INSERT INTO suppliers_catalog (id, name, notes) VALUES ($1,$2,$3) RETURNING *',
+      [id, name, payload.notes || '']
+    );
+    return mapCatalogItem(result.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') throw new Error('اسم المورد مسجل بالفعل.');
+    throw e;
+  }
 }
 
 export async function updateSupplierRecord(id, payload) {
-  const idx = suppliersCatalogStore.findIndex((item) => item.id === id);
-  if (idx === -1) return null;
-  const nextName = payload.name !== undefined ? String(payload.name).trim() : suppliersCatalogStore[idx].name;
-  if (!nextName) throw new Error('يرجى إدخال اسم المورد.');
-  const duplicated = suppliersCatalogStore.some((item) => item.id !== id && item.name.trim() === nextName);
-  if (duplicated) throw new Error('اسم المورد مسجل بالفعل.');
-  suppliersCatalogStore[idx] = {
-    ...suppliersCatalogStore[idx],
-    name: nextName,
-    notes: payload.notes !== undefined ? payload.notes : suppliersCatalogStore[idx].notes
-  };
-  return mapCatalogItem(suppliersCatalogStore[idx]);
+  const name = payload.name !== undefined ? String(payload.name).trim() : undefined;
+  if (name !== undefined && !name) throw new Error('يرجى إدخال اسم المورد.');
+  try {
+    const result = await query(
+      `UPDATE suppliers_catalog SET
+        name = COALESCE($2, name),
+        notes = COALESCE($3, notes)
+       WHERE id = $1 RETURNING *`,
+      [id, name, payload.notes]
+    );
+    if (result.rows.length === 0) return null;
+    return mapCatalogItem(result.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') throw new Error('اسم المورد مسجل بالفعل.');
+    throw e;
+  }
 }
 
 export async function deleteSupplierRecord(id) {
-  const before = suppliersCatalogStore.length;
-  suppliersCatalogStore = suppliersCatalogStore.filter((item) => item.id !== id);
-  return suppliersCatalogStore.length < before;
+  const result = await query('DELETE FROM suppliers_catalog WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
 }
 
 // ── Machine Maintenance Purchases ─────────────────────────────────────────────
@@ -1680,12 +1697,10 @@ export async function deleteFreeSampleRecord(id) {
 
 // ── Product Cards ────────────────────────────────────────────────────────────
 
-const _productCards = [];
-
 function mapProductCard(row) {
   return {
     id: row.id,
-    productName: row.productName,
+    productName: row.product_name,
     category: row.category || '',
     unit: row.unit || 'قطعة',
     code: row.code || '',
@@ -1694,7 +1709,8 @@ function mapProductCard(row) {
 }
 
 export async function getProductCardsData() {
-  const items = _productCards.map(mapProductCard);
+  const result = await query('SELECT * FROM product_cards ORDER BY created_at DESC');
+  const items = result.rows.map(mapProductCard);
   const overview = [
     { id: 'pc-total', label: 'إجمالي الأصناف', value: items.length, type: 'number', helper: 'صنف مسجل في النظام', tone: 'calm' }
   ];
@@ -1702,10 +1718,12 @@ export async function getProductCardsData() {
 }
 
 export async function createProductCardRecord(payload) {
-  const id = 'PC-' + String(_productCards.length + 1).padStart(4, '0') + '-' + Date.now();
-  const record = { id, productName: payload.productName || '', category: payload.category || '', unit: payload.unit || 'قطعة', code: payload.code || '', notes: payload.notes || '' };
-  _productCards.push(record);
-  return mapProductCard(record);
+  const id = 'PC-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+  const result = await query(
+    'INSERT INTO product_cards (id, product_name, category, unit, code, notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+    [id, payload.productName || '', payload.category || '', payload.unit || 'قطعة', payload.code || '', payload.notes || '']
+  );
+  return mapProductCard(result.rows[0]);
 }
 
 function normalizeProductName(value) {
@@ -1717,7 +1735,8 @@ export async function importProductCardsFromNames(names = []) {
     throw new Error('بيانات الاستيراد غير صحيحة.');
   }
 
-  const existing = new Set(_productCards.map((item) => normalizeProductName(item.productName)));
+  const existingResult = await query('SELECT product_name FROM product_cards');
+  const existing = new Set(existingResult.rows.map(r => normalizeProductName(r.product_name)));
   const seenInFile = new Set();
 
   let insertedCount = 0;
@@ -1737,8 +1756,11 @@ export async function importProductCardsFromNames(names = []) {
       continue;
     }
 
-    const id = 'PC-' + String(_productCards.length + 1).padStart(4, '0') + '-' + Date.now() + '-' + insertedCount;
-    _productCards.push({ id, productName: cleanedName, category: '', unit: 'قطعة', code: '', notes: '' });
+    const id = 'PC-' + Date.now() + '-' + insertedCount + '-' + Math.floor(Math.random() * 10000);
+    await query(
+      'INSERT INTO product_cards (id, product_name, category, unit, code, notes) VALUES ($1,$2,$3,$4,$5,$6)',
+      [id, cleanedName, '', 'قطعة', '', '']
+    );
     existing.add(key);
     seenInFile.add(key);
     insertedCount += 1;
@@ -1753,16 +1775,22 @@ export async function importProductCardsFromNames(names = []) {
 }
 
 export async function updateProductCardRecord(id, payload) {
-  const idx = _productCards.findIndex(r => r.id === id);
-  if (idx === -1) return null;
-  _productCards[idx] = { ..._productCards[idx], ...payload };
-  return mapProductCard(_productCards[idx]);
+  const result = await query(
+    `UPDATE product_cards SET
+      product_name = COALESCE($2, product_name),
+      category = COALESCE($3, category),
+      unit = COALESCE($4, unit),
+      code = COALESCE($5, code),
+      notes = COALESCE($6, notes)
+     WHERE id = $1 RETURNING *`,
+    [id, payload.productName, payload.category, payload.unit, payload.code, payload.notes]
+  );
+  if (result.rows.length === 0) return null;
+  return mapProductCard(result.rows[0]);
 }
 
 export async function deleteProductCardRecord(id) {
-  const idx = _productCards.findIndex(r => r.id === id);
-  if (idx === -1) return false;
-  _productCards.splice(idx, 1);
-  return true;
+  const result = await query('DELETE FROM product_cards WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
 }
 

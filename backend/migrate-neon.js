@@ -6,9 +6,13 @@ import { dirname, join } from 'path';
 const { Pool } = pg;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const DATABASE_URL = 'postgresql://neondb_owner:npg_ZfmuYvSP41Xt@ep-billowing-sound-anzg12ng-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
-
-const pool = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const pool = new Pool({
+  host: 'localhost',
+  port: 5432,
+  database: 'asmdaproje_db',
+  user: 'postgres',
+  password: 'postgres'
+});
 
 async function run() {
   const client = await pool.connect();

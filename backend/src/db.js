@@ -14,23 +14,15 @@ const ENV_PATH = join(__dirname, '../../.env');
 // Runtime-switchable mode (persists to .env on switch)
 let currentMode = (process.env.DATA_MODE ?? 'local').toLowerCase();
 
-// Cloud pool using DATABASE_URL (Neon) or individual host vars
-function createCloudPool() {
-  const connectionString = process.env.DATABASE_URL;
-  if (connectionString) {
-    return new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
-  }
-  return new Pool({
-    host: process.env.DB_HOST ?? 'localhost',
-    port: Number(process.env.DB_PORT ?? 5432),
-    database: process.env.DB_NAME ?? 'asmdaproje_db',
-    user: process.env.DB_USER ?? 'postgres',
-    password: process.env.DB_PASSWORD ?? 'postgres',
-    connectionTimeoutMillis: 5000
-  });
-}
-
-const cloudPool = createCloudPool();
+// Local PostgreSQL pool
+const cloudPool = new Pool({
+  host: process.env.DB_HOST ?? 'localhost',
+  port: Number(process.env.DB_PORT ?? 5432),
+  database: process.env.DB_NAME ?? 'asmdaproje_db',
+  user: process.env.DB_USER ?? 'postgres',
+  password: process.env.DB_PASSWORD ?? 'postgres',
+  connectionTimeoutMillis: 5000
+});
 
 let cachedStatus = {
   connected: false,
