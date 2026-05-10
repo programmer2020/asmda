@@ -1554,12 +1554,6 @@ function DashboardView({ dashboard, onNavigate, activeView, token, isAdmin }) {
               </button>
             ))}
           </div>
-
-          <div className="hero-runtime">
-            <span className="hero-runtime-label">حالة البيئة</span>
-            <strong>{meta?.message ?? 'جارٍ تجهيز البيانات المحلية.'}</strong>
-          </div>
-          {isAdmin && <span style={{ fontSize: '0.85rem', color: 'var(--accent)', marginTop: '16px', display: 'block' }}>قاعدة البيانات المحلية</span>}
         </article>
 
       </section>
