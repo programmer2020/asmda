@@ -99,7 +99,7 @@ import {
   updateCustomerRecord,
   deleteCustomerRecord
 } from './data/erbStore.js';
-import { getDatabaseStatus, safeQuery, getCurrentMode, switchMode } from './db.js';
+import { getDatabaseStatus, safeQuery } from './db.js';
 import { createSwaggerSpec } from './swagger.js';
 import bcrypt from 'bcryptjs';
 import { initializeUsersStore, getAllUsers, getUserByUsername, getUserById, createUser, updateUser, deleteUser, getAllRoles, getRoleById, createRole, updateRole, deleteRole, ALL_PAGES } from './data/users.js';
@@ -281,19 +281,6 @@ app.get('/api/health', async (_request, response) => {
     message: databaseStatus.message,
     time: databaseStatus.time
   });
-});
-
-app.get('/api/db-mode', authMiddleware, (_req, res) => {
-  res.json({ mode: getCurrentMode() });
-});
-
-app.post('/api/db-mode', authMiddleware, adminOnly, (req, res) => {
-  const { mode } = req.body;
-  if (!['local', 'cloud'].includes(mode)) {
-    return res.status(400).json({ message: 'وضع غير صالح. اختر local أو cloud.' });
-  }
-  switchMode(mode);
-  res.json({ mode: getCurrentMode() });
 });
 
 app.get('/api/dashboard', async (_request, response) => {

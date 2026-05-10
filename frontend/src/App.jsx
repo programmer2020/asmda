@@ -824,7 +824,12 @@ const navigationGroups = [
   {
     id: 'catalog-and-stores',
     label: 'الأصناف والمخازن',
-    items: ['product-cards', 'final-product-store', 'raw-materials-packaging-store', 'raw-materials-catalog', 'suppliers', 'customers', 'rep-sub-stores']
+    items: ['product-cards', 'final-product-store', 'raw-materials-packaging-store', 'raw-materials-catalog', 'rep-sub-stores']
+  },
+  {
+    id: 'customers-and-suppliers',
+    label: 'العملاء والموردين',
+    items: ['customers', 'suppliers']
   },
   {
     id: 'custodies-and-purchases',
@@ -1514,55 +1519,6 @@ function StatementView({
   );
 }
 
-function DbModeSwitch({ token }) {
-  const [mode, setMode] = useState(null);
-  const [switching, setSwitching] = useState(false);
-
-  useEffect(() => {
-    fetch(`${API_URL}/db-mode`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.mode) setMode(data.mode); })
-      .catch(() => {});
-  }, [token]);
-
-  async function toggle() {
-    const next = mode === 'local' ? 'cloud' : 'local';
-    setSwitching(true);
-    try {
-      const r = await fetch(`${API_URL}/db-mode`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ mode: next })
-      });
-      if (r.ok) {
-        const data = await r.json();
-        setMode(data.mode);
-      }
-    } finally {
-      setSwitching(false);
-    }
-  }
-
-  if (!mode) return null;
-
-  const isCloud = mode === 'cloud';
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', background: isCloud ? '#e8f5e9' : '#fff3e0', borderRadius: '12px', border: `1px solid ${isCloud ? '#a5d6a7' : '#ffcc80'}`, marginTop: '16px', flexWrap: 'wrap' }}>
-      <span style={{ fontWeight: 600, fontSize: '0.95rem', color: isCloud ? '#2e7d32' : '#e65100' }}>
-        {isCloud ? '☁ Neon Cloud Database' : '💾 Local Mode (بيانات مؤقتة)'}
-      </span>
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={switching}
-        style={{ marginRight: 'auto', padding: '6px 18px', borderRadius: '20px', border: 'none', cursor: switching ? 'not-allowed' : 'pointer', background: isCloud ? '#2e7d32' : '#e65100', color: '#fff', fontWeight: 600, fontSize: '0.85rem', opacity: switching ? 0.6 : 1 }}
-      >
-        {switching ? 'جارٍ التبديل...' : isCloud ? 'التبديل إلى المحلي' : 'التبديل إلى Cloud'}
-      </button>
-    </div>
-  );
-}
-
 function DashboardView({ dashboard, onNavigate, activeView, token, isAdmin }) {
   const { meta, brand, summary, alerts, recentSales, recentCreditSales } = dashboard;
   const quickLinks = navigation;
@@ -1603,7 +1559,7 @@ function DashboardView({ dashboard, onNavigate, activeView, token, isAdmin }) {
             <span className="hero-runtime-label">حالة البيئة</span>
             <strong>{meta?.message ?? 'جارٍ تجهيز البيانات المحلية.'}</strong>
           </div>
-          {isAdmin && <DbModeSwitch token={token} />}
+          {isAdmin && <span style={{ fontSize: '0.85rem', color: 'var(--accent)', marginTop: '16px', display: 'block' }}>قاعدة البيانات المحلية</span>}
         </article>
 
       </section>
