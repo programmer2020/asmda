@@ -1452,3 +1452,72 @@ textarea {
   padding: 32px;
   font-size: 0.95rem;
 }
+
+/* ── Searchable Select ─────────────────────────────────────────── */
+.searchable-select {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-select-input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.searchable-select-input:focus {
+  outline: none;
+  border-color: rgba(21, 128, 61, 0.4);
+  background: #ffffff;
+  box-shadow: 0 0 0 4px var(--accent-soft);
+  cursor: text;
+}
+
+.searchable-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.13);
+  list-style: none;
+  margin: 0;
+  padding: 5px;
+}
+
+.searchable-select-dropdown li {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  color: var(--text);
+  transition: background 0.13s;
+}
+
+.searchable-select-dropdown li:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.searchable-select-dropdown li.ss-selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.searchable-select-dropdown li.ss-empty {
+  color: var(--muted);
+  cursor: default;
+  text-align: center;
+  font-size: 0.88rem;
+}

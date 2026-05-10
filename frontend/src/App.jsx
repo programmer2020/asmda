@@ -1219,6 +1219,77 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message }) {
   );
 }
 
+function SearchableSelect({ name, value, onChange, options = [], placeholder = '— اختر —', required = false, style = {} }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  const normalized = options.map(opt =>
+    typeof opt === 'string' ? { value: opt, label: opt } : opt
+  );
+  const selected = normalized.find(opt => opt.value === value);
+  const displayLabel = selected ? selected.label : '';
+  const filtered = query.trim()
+    ? normalized.filter(opt => opt.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : normalized;
+
+  useEffect(() => {
+    function onOutsideClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false);
+        setQuery('');
+      }
+    }
+    if (open) document.addEventListener('mousedown', onOutsideClick);
+    return () => document.removeEventListener('mousedown', onOutsideClick);
+  }, [open]);
+
+  function handleSelect(optVal) {
+    onChange({ target: { name: name || '', value: optVal } });
+    setOpen(false);
+    setQuery('');
+  }
+
+  return (
+    <div ref={containerRef} className="searchable-select" style={style}>
+      <input
+        type="text"
+        className="searchable-select-input"
+        value={open ? query : displayLabel}
+        placeholder={displayLabel || placeholder}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        autoComplete="off"
+      />
+      {required && name && (
+        <input
+          type="text"
+          name={name}
+          value={value || ''}
+          onChange={() => {}}
+          required
+          tabIndex={-1}
+          style={{ position: 'absolute', left: 0, top: 0, opacity: 0, height: 0, width: 0, padding: 0, border: 'none', pointerEvents: 'none' }}
+          aria-hidden="true"
+        />
+      )}
+      {open && (
+        <ul className="searchable-select-dropdown">
+          {filtered.length === 0 ? (
+            <li className="ss-empty">لا توجد نتائج</li>
+          ) : filtered.map(opt => (
+            <li
+              key={opt.value}
+              className={opt.value === value ? 'ss-selected' : ''}
+              onMouseDown={() => handleSelect(opt.value)}
+            >{opt.label}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function SummaryCards({ items }) {
   return (
     <section className="summary-grid">
@@ -1316,14 +1387,13 @@ function StatementView({
           <div className="statement-controls">
             <label>
               <span>اسم العميل</span>
-              <select value={statement.customerName} onChange={onCustomerChange}>
-                <option value="">اختر عميلًا</option>
-                {customers.map((customer) => (
-                  <option key={customer} value={customer}>
-                    {customer}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                name="customerName"
+                value={statement.customerName}
+                onChange={onCustomerChange}
+                options={customers}
+                placeholder="اختر عميلًا"
+              />
             </label>
 
             <button
@@ -1663,27 +1733,25 @@ function SalesView({
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل</span>
-            <select name="customerName" value={form.customerName} onChange={onChange} required>
-              <option value="">{customerOptions.length > 0 ? '— اختر عميلاً —' : 'لا يوجد عملاء متاحون'}</option>
-              {customerOptions.map((customerName) => (
-                <option key={customerName} value={customerName}>{customerName}</option>
-              ))}
-              {form.customerName && !customerOptions.includes(form.customerName) ? (
-                <option value={form.customerName}>{form.customerName}</option>
-              ) : null}
-            </select>
+            <SearchableSelect
+              name="customerName"
+              value={form.customerName}
+              onChange={onChange}
+              options={customerOptions}
+              placeholder={customerOptions.length > 0 ? '— اختر عميلاً —' : 'لا يوجد عملاء متاحون'}
+              required
+            />
           </label>
           <label>
             <span>مسؤول المبيعات</span>
-            <select name="salesRep" value={form.salesRep} onChange={onChange} required>
-              <option value="">{salesRepOptions.length > 0 ? '— اختر مسؤول المبيعات —' : 'لا يوجد مندوبون متاحون'}</option>
-              {salesRepOptions.map((repName) => (
-                <option key={repName} value={repName}>{repName}</option>
-              ))}
-              {form.salesRep && !salesRepOptions.includes(form.salesRep) ? (
-                <option value={form.salesRep}>{form.salesRep}</option>
-              ) : null}
-            </select>
+            <SearchableSelect
+              name="salesRep"
+              value={form.salesRep}
+              onChange={onChange}
+              options={salesRepOptions}
+              placeholder={salesRepOptions.length > 0 ? '— اختر مسؤول المبيعات —' : 'لا يوجد مندوبون متاحون'}
+              required
+            />
           </label>
 
           <div className="full-width" style={{ overflowX: 'auto' }}>
@@ -1701,20 +1769,13 @@ function SalesView({
                 {formItems.map((item, index) => (
                   <tr key={index} style={{ borderBottom: '1px solid #e2e8f0' }}>
                     <td style={{ padding: '6px 10px' }}>
-                      <select
+                      <SearchableSelect
                         value={item.productName}
                         onChange={(event) => onItemChange(index, 'productName', event.target.value)}
-                        style={{ width: '100%' }}
+                        options={salesProductOptions}
+                        placeholder={salesProductOptions.length > 0 ? '— اختر الصنف —' : 'لا توجد أصناف متاحة'}
                         required
-                      >
-                        <option value="">{salesProductOptions.length > 0 ? '— اختر الصنف —' : 'لا توجد أصناف متاحة'}</option>
-                        {salesProductOptions.map((productName) => (
-                          <option key={productName} value={productName}>{productName}</option>
-                        ))}
-                        {item.productName && !salesProductOptions.includes(item.productName) ? (
-                          <option value={item.productName}>{item.productName}</option>
-                        ) : null}
-                      </select>
+                      />
                     </td>
                     <td style={{ padding: '6px 10px' }}>
                       <input
@@ -1881,11 +1942,13 @@ function CreditSalesView({
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل</span>
-            <select name="customerName" value={form.customerName} onChange={onChange}>
-              <option value="">{supplierOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}</option>
-              {supplierOptions.map((name) => <option key={name} value={name}>{name}</option>)}
-              {form.customerName && !supplierOptions.includes(form.customerName) ? <option value={form.customerName}>{form.customerName}</option> : null}
-            </select>
+            <SearchableSelect
+              name="customerName"
+              value={form.customerName}
+              onChange={onChange}
+              options={supplierOptions}
+              placeholder={supplierOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}
+            />
           </label>
           <label>
             <span>رقم الفاتورة</span>
@@ -1908,18 +1971,12 @@ function CreditSalesView({
                 {formItems.map((it, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
                     <td style={{ padding: '6px 10px' }}>
-                      <select
+                      <SearchableSelect
                         value={it.productName}
                         onChange={(e) => onItemChange(i, 'productName', e.target.value)}
-                        style={{ width: '100%' }}
-                      >
-                        <option value="">— اختر الصنف —</option>
-                        {(priceList.items || []).map((p) => (
-                          <option key={p.productName} value={p.productName}>{p.productName}</option>
-                        ))}
-                        {it.productName && !(priceList.items || []).find((p) => p.productName === it.productName)
-                          ? <option value={it.productName}>{it.productName}</option> : null}
-                      </select>
+                        options={(priceList.items || []).map(p => p.productName)}
+                        placeholder="— اختر الصنف —"
+                      />
                     </td>
                     <td style={{ padding: '6px 10px' }}>
                       <input
@@ -1999,11 +2056,13 @@ function CreditSalesView({
           </label>
           <label>
             <span>مسؤول المبيعات</span>
-            <select name="salesRep" value={form.salesRep} onChange={onChange}>
-              <option value="">{salesRepOptions.length > 0 ? '— اختر مندوب المبيعات —' : 'لا يوجد مندوبون مسجلون'}</option>
-              {salesRepOptions.map((name) => <option key={name} value={name}>{name}</option>)}
-              {form.salesRep && !salesRepOptions.includes(form.salesRep) ? <option value={form.salesRep}>{form.salesRep}</option> : null}
-            </select>
+            <SearchableSelect
+              name="salesRep"
+              value={form.salesRep}
+              onChange={onChange}
+              options={salesRepOptions}
+              placeholder={salesRepOptions.length > 0 ? '— اختر مندوب المبيعات —' : 'لا يوجد مندوبون مسجلون'}
+            />
           </label>
           <label className="full-width">
             <span>تاريخ الاستحقاق</span>
@@ -2097,22 +2156,23 @@ function ReturnsView({
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل</span>
-            <select name="customerName" value={form.customerName} onChange={onChange}>
-              <option value="">{supplierOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}</option>
-              {supplierOptions.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-              {form.customerName && !supplierOptions.includes(form.customerName) ? <option value={form.customerName}>{form.customerName}</option> : null}
-            </select>
+            <SearchableSelect
+              name="customerName"
+              value={form.customerName}
+              onChange={onChange}
+              options={supplierOptions}
+              placeholder={supplierOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}
+            />
           </label>
           <label>
             <span>اسم الصنف</span>
-            <select name="productName" value={form.productName} onChange={onChange}>
-              <option value="">-- اختر الصنف --</option>
-              {productOptions.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              name="productName"
+              value={form.productName}
+              onChange={onChange}
+              options={productOptions}
+              placeholder="-- اختر الصنف --"
+            />
           </label>
           <label>
             <span>رقم الفاتورة الأصلية (اختياري)</span>
@@ -2541,12 +2601,14 @@ function ChecksView({
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل / الساحب</span>
-            <select name="customerName" value={form.customerName} onChange={onChange} required>
-              <option value="">-- اختر العميل --</option>
-              {supplierOptions.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              name="customerName"
+              value={form.customerName}
+              onChange={onChange}
+              options={supplierOptions}
+              placeholder="-- اختر العميل --"
+              required
+            />
           </label>
           <label>
             <span>رقم الشيك</span>
@@ -2590,12 +2652,14 @@ function ChecksView({
         <form className="form-grid" onSubmit={onCashSubmit}>
           <label>
             <span>اسم العميل</span>
-            <select name="customerName" value={cashForm.customerName} onChange={onCashChange} required>
-              <option value="">-- اختر العميل --</option>
-              {supplierOptions.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              name="customerName"
+              value={cashForm.customerName}
+              onChange={onCashChange}
+              options={supplierOptions}
+              placeholder="-- اختر العميل --"
+              required
+            />
           </label>
           <label>
             <span>المبلغ المستلم</span>
@@ -4579,15 +4643,18 @@ function MainApp({ auth, onLogout }) {
             formFields={<>
               <label className="full-width"><span>الصنف</span>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <select name="productName" value={fpForm.productName} onChange={(e) => {
-                    const selected = productCards.items?.find(p => p.productName === e.target.value);
-                    setFpForm(prev => ({ ...prev, productName: e.target.value, category: selected?.category || prev.category, unit: selected?.unit || prev.unit }));
-                  }} required style={{ flex: 1 }}>
-                    <option value="">— اختر صنفاً من كبون الأصناف —</option>
-                    {productCards?.items?.map(p => (
-                      <option key={p.id} value={p.productName}>{p.productName}{p.code ? ` (${p.code})` : ''}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    name="productName"
+                    value={fpForm.productName}
+                    onChange={(e) => {
+                      const selected = productCards.items?.find(p => p.productName === e.target.value);
+                      setFpForm(prev => ({ ...prev, productName: e.target.value, category: selected?.category || prev.category, unit: selected?.unit || prev.unit }));
+                    }}
+                    options={(productCards?.items || []).map(p => ({ value: p.productName, label: p.productName + (p.code ? ` (${p.code})` : '') }))}
+                    placeholder="— اختر صنفاً من كبون الأصناف —"
+                    required
+                    style={{ flex: 1 }}
+                  />
                   <button type="button" className="ghost-button small" onClick={() => { fpCrud.closeForm(); navigateTo('product-cards'); }} title="إضافة كبون أصناف">➕ إضافة كبون أصناف</button>
                 </div>
               </label>
@@ -4732,26 +4799,22 @@ function MainApp({ auth, onLogout }) {
           <Modal isOpen={transferFormOpen} onClose={() => setTransferFormOpen(false)} title="نقل من مخزن المنتج النهائي إلى مندوب" errorMessage={transferFormOpen ? error : ''}>
             <form className="form-grid" onSubmit={handleTransferSubmit}>
               <label><span>اسم المندوب</span>
-                <select value={transferForm.repName} onChange={e => setTransferForm(f => ({...f, repName: e.target.value}))} required>
-                  <option value="">{transferRepOptions.length > 0 ? '— اختر مندوباً —' : 'لا توجد أسماء مناديب متاحة'}</option>
-                  {transferRepOptions.map((repName) => (
-                    <option key={repName} value={repName}>{repName}</option>
-                  ))}
-                  {transferForm.repName && !transferRepOptions.includes(transferForm.repName) ? (
-                    <option value={transferForm.repName}>{transferForm.repName}</option>
-                  ) : null}
-                </select>
+                <SearchableSelect
+                  value={transferForm.repName}
+                  onChange={e => setTransferForm(f => ({...f, repName: e.target.value}))}
+                  options={transferRepOptions}
+                  placeholder={transferRepOptions.length > 0 ? '— اختر مندوباً —' : 'لا توجد أسماء مناديب متاحة'}
+                  required
+                />
               </label>
               <label><span>المنتج</span>
-                <select value={transferForm.productName} onChange={e => setTransferForm(f => ({...f, productName: e.target.value}))} required>
-                  <option value="">{transferProductOptions.length > 0 ? '— اختر منتجاً —' : 'لا توجد منتجات متاحة في المخزن النهائي'}</option>
-                  {finalProductStore.items.map((p) => (
-                    <option key={p.id} value={p.productName}>{p.productName} (متاح: {p.quantity} {p.unit})</option>
-                  ))}
-                  {transferForm.productName && !transferProductOptions.includes(transferForm.productName) ? (
-                    <option value={transferForm.productName}>{transferForm.productName}</option>
-                  ) : null}
-                </select>
+                <SearchableSelect
+                  value={transferForm.productName}
+                  onChange={e => setTransferForm(f => ({...f, productName: e.target.value}))}
+                  options={finalProductStore.items.map(p => ({ value: p.productName, label: `${p.productName} (متاح: ${p.quantity} ${p.unit})` }))}
+                  placeholder={transferProductOptions.length > 0 ? '— اختر منتجاً —' : 'لا توجد منتجات متاحة في المخزن النهائي'}
+                  required
+                />
               </label>
               <label><span>الكمية المنقولة</span><input type="number" min="1" value={transferForm.quantity} onChange={e => setTransferForm(f => ({...f, quantity: e.target.value}))} required /></label>
               <label><span>تاريخ التسليم</span><input type="date" value={transferForm.deliveryDate} onChange={e => setTransferForm(f => ({...f, deliveryDate: e.target.value}))} /></label>
@@ -4854,14 +4917,14 @@ function MainApp({ auth, onLogout }) {
             formFields={<>
               <>
                 <label><span>اسم الموظف</span>
-                  <select name="employeeName" value={fmcForm.employeeName} onChange={fmcCrud.handleInput} required>
-                    <option value="">{adminEmployeeOptionsWithFallback.length > 0 ? '— اختر مديرًا —' : 'لا يوجد مستخدم admin متاح'}</option>
-                    {adminEmployeeOptionsWithFallback.map((user) => (
-                      <option key={user.id ?? user.displayName} value={user.displayName}>
-                        {user.displayName}{user.code ? ` (${user.code})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    name="employeeName"
+                    value={fmcForm.employeeName}
+                    onChange={fmcCrud.handleInput}
+                    options={adminEmployeeOptionsWithFallback.map(u => ({ value: u.displayName, label: u.displayName + (u.code ? ` (${u.code})` : '') }))}
+                    placeholder={adminEmployeeOptionsWithFallback.length > 0 ? '— اختر مديرًا —' : 'لا يوجد مستخدم admin متاح'}
+                    required
+                  />
                 </label>
                 <label><span>قيمة العهدة</span><input name="amount" type="number" min="0" step="0.01" value={fmcForm.amount} onChange={fmcCrud.handleInput} required /></label>
                 <label><span>الغرض</span><input name="purpose" value={fmcForm.purpose} onChange={fmcCrud.handleInput} required /></label>
@@ -4874,12 +4937,14 @@ function MainApp({ auth, onLogout }) {
           <Modal isOpen={fmcAssignOpen} onClose={() => { setFmcAssignOpen(false); setActiveManagerCustodyId(''); }} title="تعيين عهدة موظف" errorMessage={fmcAssignOpen ? error : ''}>
             <form className="form-grid" onSubmit={handleFmcAssignSubmit}>
               <label><span>اسم الموظف</span>
-                <select name="employeeName" value={fmcAssignForm.employeeName} onChange={e => setFmcAssignForm(c => ({ ...c, employeeName: e.target.value }))} required>
-                  <option value="">{employeeOptionsWithFallback.length > 0 ? '— اختر موظفًا —' : 'لا يوجد موظفون متاحون'}</option>
-                  {employeeOptionsWithFallback.map((user) => (
-                    <option key={user.id ?? user.displayName} value={user.displayName}>{user.displayName}{user.code ? ` (${user.code})` : ''}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  name="employeeName"
+                  value={fmcAssignForm.employeeName}
+                  onChange={e => setFmcAssignForm(c => ({ ...c, employeeName: e.target.value }))}
+                  options={employeeOptionsWithFallback.map(u => ({ value: u.displayName, label: u.displayName + (u.code ? ` (${u.code})` : '') }))}
+                  placeholder={employeeOptionsWithFallback.length > 0 ? '— اختر موظفًا —' : 'لا يوجد موظفون متاحون'}
+                  required
+                />
               </label>
               <label><span>المبلغ المعين</span><input name="amount" type="number" min="0" step="0.01" value={fmcAssignForm.amount} onChange={e => setFmcAssignForm(c => ({ ...c, amount: e.target.value }))} required /></label>
               <label><span>التاريخ</span><input name="custodyDate" type="date" value={fmcAssignForm.custodyDate} onChange={e => setFmcAssignForm(c => ({ ...c, custodyDate: e.target.value }))} required /></label>
@@ -5083,22 +5148,24 @@ function MainApp({ auth, onLogout }) {
             )}
             formFields={<>
               <label><span>اسم المورد</span>
-                <select name="supplierName" value={rmpForm.supplierName} onChange={rmpCrud.handleInput} required>
-                  <option value="">{supplierNameOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}</option>
-                  {supplierNameOptions.map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                  {rmpForm.supplierName && !supplierNameOptions.includes(rmpForm.supplierName) ? <option value={rmpForm.supplierName}>{rmpForm.supplierName}</option> : null}
-                </select>
+                <SearchableSelect
+                  name="supplierName"
+                  value={rmpForm.supplierName}
+                  onChange={rmpCrud.handleInput}
+                  options={supplierNameOptions}
+                  placeholder={supplierNameOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}
+                  required
+                />
               </label>
               <label><span>اسم الخامة</span>
-                <select name="materialName" value={rmpForm.materialName} onChange={rmpCrud.handleInput} required>
-                  <option value="">{materialNameOptions.length > 0 ? '— اختر خامة —' : 'لا توجد خامات مسجلة'}</option>
-                  {materialNameOptions.map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                  {rmpForm.materialName && !materialNameOptions.includes(rmpForm.materialName) ? <option value={rmpForm.materialName}>{rmpForm.materialName}</option> : null}
-                </select>
+                <SearchableSelect
+                  name="materialName"
+                  value={rmpForm.materialName}
+                  onChange={rmpCrud.handleInput}
+                  options={materialNameOptions}
+                  placeholder={materialNameOptions.length > 0 ? '— اختر خامة —' : 'لا توجد خامات مسجلة'}
+                  required
+                />
               </label>
               <label><span>الكمية</span><input name="quantity" type="number" min="0" step="0.01" value={rmpForm.quantity} onChange={rmpCrud.handleInput} required /></label>
               <label><span>سعر الوحدة</span><input name="unitPrice" type="number" min="0" step="0.01" value={rmpForm.unitPrice} onChange={rmpCrud.handleInput} required /></label>
@@ -5172,13 +5239,14 @@ function MainApp({ auth, onLogout }) {
             )}
             formFields={<>
               <label><span>اسم المورد</span>
-                <select name="supplierName" value={mmpForm.supplierName} onChange={mmpCrud.handleInput} required>
-                  <option value="">{supplierNameOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}</option>
-                  {supplierNameOptions.map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                  {mmpForm.supplierName && !supplierNameOptions.includes(mmpForm.supplierName) ? <option value={mmpForm.supplierName}>{mmpForm.supplierName}</option> : null}
-                </select>
+                <SearchableSelect
+                  name="supplierName"
+                  value={mmpForm.supplierName}
+                  onChange={mmpCrud.handleInput}
+                  options={supplierNameOptions}
+                  placeholder={supplierNameOptions.length > 0 ? '— اختر موردًا —' : 'لا يوجد موردون مسجلون'}
+                  required
+                />
               </label>
               <label><span>وصف العملية</span><input name="description" value={mmpForm.description} onChange={mmpCrud.handleInput} required /></label>
               <label><span>القيمة</span><input name="amount" type="number" min="0" step="0.01" value={mmpForm.amount} onChange={mmpCrud.handleInput} required /></label>
