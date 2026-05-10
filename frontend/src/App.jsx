@@ -1163,7 +1163,13 @@ function Modal({ isOpen, onClose, title, children, errorMessage = '' }) {
           const validationMessage = event.target?.validationMessage;
           if (validationMessage) {
             event.preventDefault();
-            setClientValidationMessage(validationMessage);
+            const arabicMsg =
+              validationMessage === 'Please fill out this field.' ||
+              validationMessage === 'Please fill in this field.' ||
+              validationMessage.startsWith('Please fill')
+                ? 'هذا الحقل مطلوب'
+                : validationMessage;
+            setClientValidationMessage(arabicMsg);
           }
         }}
         onInputCapture={() => {
@@ -1269,6 +1275,7 @@ function SearchableSelect({ name, value, onChange, options = [], placeholder = '
           onChange={() => {}}
           required
           tabIndex={-1}
+          ref={el => { if (el) el.setCustomValidity(value ? '' : 'هذا الحقل مطلوب'); }}
           style={{ position: 'absolute', left: 0, top: 0, opacity: 0, height: 0, width: 0, padding: 0, border: 'none', pointerEvents: 'none' }}
           aria-hidden="true"
         />
@@ -1414,9 +1421,9 @@ function StatementView({
 
         <article className="statement-report-paper">
           <header className="statement-report-header">
-            <h1>Customer Detailed Sales Report</h1>
+            <h1>تقرير حساب العميل التفصيلي</h1>
             <h2>
-              <span>Customer :</span>
+              <span>العميل :</span>
               <strong>{statement.customerName || '........'}</strong>
             </h2>
           </header>
@@ -1434,8 +1441,8 @@ function StatementView({
               <table className="statement-table statement-report-table">
                 <thead>
                   <tr>
-                    <th>Adl</th>
-                    <th>Discount</th>
+                    <th>تسوية</th>
+                    <th>خصم</th>
                     <th>الرصيد</th>
                     <th>مدين</th>
                     <th>دائن</th>
@@ -1444,7 +1451,7 @@ function StatementView({
                     <th>سعر</th>
                     <th>كمية</th>
                     <th>وصف</th>
-                    <th>Delivery Address</th>
+                    <th>عنوان التسليم</th>
                     <th>نوع المعاملة</th>
                     <th>رقم المرجع</th>
                     <th>مسلسل</th>
@@ -1458,7 +1465,7 @@ function StatementView({
                       <td>{entry.discount > 0 ? new Intl.NumberFormat('en-US').format(entry.discount) : '0'}</td>
                       <td className="statement-balance-cell">
                         <strong>{new Intl.NumberFormat('en-US').format(entry.balance)}</strong>
-                        <span>{entry.balance >= 0 ? 'DR' : 'CR'}</span>
+                        <span>{entry.balance >= 0 ? 'مدين' : 'دائن'}</span>
                       </td>
                       <td>{entry.debit > 0 ? new Intl.NumberFormat('en-US').format(entry.debit) : '0'}</td>
                       <td>{entry.credit > 0 ? new Intl.NumberFormat('en-US').format(entry.credit) : '0'}</td>
@@ -3969,11 +3976,14 @@ function MainApp({ auth, onLogout }) {
       setFmcSaving(true);
       setError('');
       setNotice('');
+      // Auto-detect: if selected employee is an admin/manager, mark as manager custody
+      const isManager = adminEmployeeOptionsWithFallback.some(u => u.displayName === fmcAssignForm.employeeName);
       const payload = {
         employeeName: fmcAssignForm.employeeName,
         amount: Number(fmcAssignForm.amount || 0),
         custodyDate: fmcAssignForm.custodyDate || null,
-        notes: fmcAssignForm.notes || ''
+        notes: fmcAssignForm.notes || '',
+        isManager
       };
       const res = await fetch(`/api/financial-manager-custody/${activeManagerCustodyId}/assign`, {
         method: 'POST',
@@ -4709,7 +4719,7 @@ function MainApp({ auth, onLogout }) {
             )}
             formFields={<>
               <label><span>اسم الخامة</span>
-                <select
+                <SearchableSelect
                   name="materialName"
                   value={rmForm.materialName}
                   onChange={(e) => {
@@ -4720,14 +4730,10 @@ function MainApp({ auth, onLogout }) {
                       category: materialCategoryByName[selectedName] ?? ''
                     }));
                   }}
+                  options={materialNameOptions}
+                  placeholder={materialNameOptions.length > 0 ? '— اختر خامة —' : 'لا توجد خامات مسجلة'}
                   required
-                >
-                  <option value="">{materialNameOptions.length > 0 ? '— اختر خامة —' : 'لا توجد خامات مسجلة'}</option>
-                  {materialNameOptions.map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                  {rmForm.materialName && !materialNameOptions.includes(rmForm.materialName) ? <option value={rmForm.materialName}>{rmForm.materialName}</option> : null}
-                </select>
+                />
               </label>
               <label><span>التصنيف</span><input className="readonly-field" name="category" value={rmForm.category} readOnly /></label>
               <label><span>الكمية</span><input name="quantity" type="number" min="0" value={rmForm.quantity} onChange={rmCrud.handleInput} /></label>

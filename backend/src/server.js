@@ -852,7 +852,8 @@ app.post('/api/financial-manager-custody/:id/assign', async (req, res) => {
       initialAmount: amount,
       startDate: req.body.custodyDate || null,
       status: 'نشطة',
-      notes: req.body.notes || ''
+      notes: req.body.notes || '',
+      isManager: req.body.isManager === true || req.body.isManager === 'true'
     });
 
     res.status(201).json(createdCustody);

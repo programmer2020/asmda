@@ -648,7 +648,8 @@ function mapCustodyItem(row) {
     currentBalance: Number(row.current_balance),
     startDate: row.start_date ? new Date(row.start_date).toISOString().split('T')[0] : null,
     status: row.status,
-    notes: row.notes || ''
+    notes: row.notes || '',
+    isManager: row.is_manager === true || row.is_manager === 't' || row.is_manager === 1
   };
 }
 
@@ -676,7 +677,9 @@ function toLocalDateKey(value) {
 
 export async function getCustodiesData() {
   const result = await query('SELECT * FROM custodies ORDER BY created_at DESC');
-  const items = result.rows.map(mapCustodyItem);
+  const allItems = result.rows.map(mapCustodyItem);
+  // Employee custodies (non-manager) go in the main list
+  const items = allItems.filter(item => !item.isManager);
 
   const activeCash = items.filter(item => item.custodyType === 'نقدية' && item.status === 'نشطة').reduce((sum, item) => sum + item.currentBalance, 0);
   const activeItemsCount = items.filter(item => item.custodyType === 'عينية' && item.status === 'نشطة').length;
@@ -720,8 +723,8 @@ export async function createCustodyRecord(payload) {
 
   const text = `
     INSERT INTO custodies 
-    (id, employee_name, custody_type, item_details, initial_amount, current_balance, start_date, status, notes) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *
+    (id, employee_name, custody_type, item_details, initial_amount, current_balance, start_date, status, notes, is_manager) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *
   `;
   const isCash = payload.custodyType === 'نقدية';
   const values = [
@@ -733,7 +736,8 @@ export async function createCustodyRecord(payload) {
     isCash ? Number(payload.initialAmount || 0) : 0,
     payload.startDate || null,
     payload.status || 'نشطة',
-    payload.notes || ''
+    payload.notes || '',
+    payload.isManager === true || payload.isManager === 'true'
   ];
 
   const result = await query(text, values);
@@ -749,7 +753,8 @@ export async function updateCustodyRecord(id, payload) {
       initial_amount = COALESCE($5, initial_amount),
       status = COALESCE($6, status),
       start_date = COALESCE($7, start_date),
-      notes = COALESCE($8, notes)
+      notes = COALESCE($8, notes),
+      is_manager = COALESCE($9, is_manager)
     WHERE id = $1 RETURNING *
   `;
   const values = [
@@ -760,7 +765,8 @@ export async function updateCustodyRecord(id, payload) {
     payload.initialAmount !== undefined ? Number(payload.initialAmount) : undefined,
     payload.status,
     payload.startDate,
-    payload.notes
+    payload.notes,
+    payload.isManager !== undefined ? (payload.isManager === true || payload.isManager === 'true') : undefined
   ];
 
   const result = await query(text, values);
