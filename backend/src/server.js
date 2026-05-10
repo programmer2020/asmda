@@ -940,10 +940,14 @@ app.get('/api/misc-purchases', async (_req, res) => { try { res.json(await getMi
 app.post('/api/misc-purchases', async (req, res) => {
   if (!req.body.description) { res.status(400).json({ message: 'يرجى إدخال وصف المصروف.' }); return; }
   if (Number(req.body.amount) <= 0) { res.status(400).json({ message: 'القيمة يجب أن تكون أكبر من صفر.' }); return; }
+  if (!req.body.purchaseDate) { res.status(400).json({ message: 'يرجى إدخال تاريخ المصروف.' }); return; }
+  if (!String(req.body.receiptNumber || '').trim()) { res.status(400).json({ message: 'يرجى إدخال رقم الإيصال.' }); return; }
   try { res.status(201).json(await createMiscPurchaseRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
 });
 app.put('/api/misc-purchases/:id', async (req, res) => {
   if (!req.body.description) { res.status(400).json({ message: 'يرجى إدخال وصف المصروف.' }); return; }
+  if (!req.body.purchaseDate) { res.status(400).json({ message: 'يرجى إدخال تاريخ المصروف.' }); return; }
+  if (!String(req.body.receiptNumber || '').trim()) { res.status(400).json({ message: 'يرجى إدخال رقم الإيصال.' }); return; }
   try { const u = await updateMiscPurchaseRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
 });
 app.delete('/api/misc-purchases/:id', async (req, res) => { try { const d = await deleteMiscPurchaseRecord(req.params.id); if (!d) { res.status(404).json({ message: 'السجل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });

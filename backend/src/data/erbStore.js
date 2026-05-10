@@ -1876,6 +1876,8 @@ function mapCustomer(row) {
     name: row.name,
     phone: row.phone || '',
     address: row.address || '',
+    governorate: row.governorate || '',
+    registrationDate: row.registration_date ? String(row.registration_date).slice(0, 10) : '',
     notes: row.notes || ''
   };
 }
@@ -1896,8 +1898,8 @@ export async function createCustomerRecord(payload) {
   const id = `CUST-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   try {
     const result = await query(
-      'INSERT INTO customers_catalog (id, code, name, phone, address, notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [id, code, name, payload.phone || '', payload.address || '', payload.notes || '']
+      'INSERT INTO customers_catalog (id, code, name, phone, address, governorate, registration_date, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      [id, code, name, payload.phone || '', payload.address || '', payload.governorate || '', payload.registrationDate || null, payload.notes || '']
     );
     return mapCustomer(result.rows[0]);
   } catch (e) {
@@ -1913,13 +1915,15 @@ export async function updateCustomerRecord(id, payload) {
   try {
     const result = await query(
       `UPDATE customers_catalog SET
-        code    = COALESCE($2, code),
-        name    = COALESCE($3, name),
-        phone   = COALESCE($4, phone),
-        address = COALESCE($5, address),
-        notes   = COALESCE($6, notes)
+        code              = COALESCE($2, code),
+        name              = COALESCE($3, name),
+        phone             = COALESCE($4, phone),
+        address           = COALESCE($5, address),
+        governorate       = COALESCE($6, governorate),
+        registration_date = COALESCE($7, registration_date),
+        notes             = COALESCE($8, notes)
        WHERE id = $1 RETURNING *`,
-      [id, code, name, payload.phone, payload.address, payload.notes]
+      [id, code, name, payload.phone, payload.address, payload.governorate, payload.registrationDate || null, payload.notes]
     );
     if (result.rows.length === 0) return null;
     return mapCustomer(result.rows[0]);

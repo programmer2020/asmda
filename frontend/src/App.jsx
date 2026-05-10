@@ -955,7 +955,7 @@ const initialFinManagerCustodyForm = { employeeName: '', amount: '', purpose: ''
 const initialRawPurchaseForm = { supplierName: '', materialName: '', quantity: '', unitPrice: '', purchaseDate: '', invoiceNumber: '', notes: '' };
 const initialRawMaterialCatalogForm = { name: '', category: '', notes: '' };
 const initialSupplierForm = { code: '', name: '', notes: '' };
-const initialCustomerForm = { code: '', name: '', phone: '', address: '', notes: '' };
+const initialCustomerForm = { code: '', name: '', phone: '', address: '', governorate: '', registrationDate: '', notes: '' };
 const initialMachinePurchaseForm = { supplierName: '', description: '', amount: '', purchaseDate: '', machineName: '', invoiceNumber: '', notes: '' };
 const initialMiscPurchaseForm = { description: '', amount: '', category: '', purchaseDate: '', receiptNumber: '', notes: '' };
 const initialPayrollAdvanceForm = { employeeName: '', type: 'راتب', amount: '', month: '', status: 'معلق', notes: '' };
@@ -1160,15 +1160,24 @@ function Modal({ isOpen, onClose, title, children, errorMessage = '' }) {
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
         onInvalidCapture={(event) => {
-          const validationMessage = event.target?.validationMessage;
-          if (validationMessage) {
+          const el = event.target;
+          const vm = el?.validationMessage;
+          if (vm) {
             event.preventDefault();
-            const arabicMsg =
-              validationMessage === 'Please fill out this field.' ||
-              validationMessage === 'Please fill in this field.' ||
-              validationMessage.startsWith('Please fill')
-                ? 'هذا الحقل مطلوب'
-                : validationMessage;
+            // Find label text from closest <label><span>
+            const labelEl = el.closest('label');
+            const fieldLabel = labelEl?.querySelector('span')?.textContent?.trim()
+              || el.getAttribute('aria-label')
+              || el.placeholder
+              || '';
+            const isRequired =
+              vm === 'Please fill out this field.' ||
+              vm === 'Please fill in this field.' ||
+              vm.startsWith('Please fill') ||
+              vm === el.validationMessage && el.validity.valueMissing;
+            const arabicMsg = isRequired
+              ? (fieldLabel ? `حقل "${fieldLabel}" مطلوب` : 'هذا الحقل مطلوب')
+              : vm;
             setClientValidationMessage(arabicMsg);
           }
         }}
@@ -1186,12 +1195,12 @@ function Modal({ isOpen, onClose, title, children, errorMessage = '' }) {
         <button className="modal-close" onClick={onClose} aria-label="Close">
           &times;
         </button>
-        <div className="section-head" style={{ marginBottom: '24px' }}>
+        <div className="section-head" style={{ marginBottom: '12px' }}>
           <div>
             <h3>{title}</h3>
           </div>
         </div>
-        {visibleErrorMessage ? <section className="notice error" style={{ marginBottom: '16px' }}>{visibleErrorMessage}</section> : null}
+        {visibleErrorMessage ? <section className="notice error" style={{ marginBottom: '8px', padding: '10px 14px', fontSize: '0.9rem' }}>{visibleErrorMessage}</section> : null}
         {children}
       </div>
     </div>
@@ -1275,7 +1284,14 @@ function SearchableSelect({ name, value, onChange, options = [], placeholder = '
           onChange={() => {}}
           required
           tabIndex={-1}
-          ref={el => { if (el) el.setCustomValidity(value ? '' : 'هذا الحقل مطلوب'); }}
+          ref={el => {
+            if (el) {
+              // Find label text from closest <label><span> so the validation message says the field name
+              const labelEl = el.closest('label');
+              const fieldLabel = labelEl?.querySelector('span')?.textContent?.trim() || '';
+              el.setCustomValidity(value ? '' : (fieldLabel ? `حقل "${fieldLabel}" مطلوب` : 'هذا الحقل مطلوب'));
+            }
+          }}
           style={{ position: 'absolute', left: 0, top: 0, opacity: 0, height: 0, width: 0, padding: 0, border: 'none', pointerEvents: 'none' }}
           aria-hidden="true"
         />
@@ -2722,15 +2738,29 @@ function MainApp({ auth, onLogout }) {
     }))
     .filter((group) => group.items.length > 0);
 
-  const [expandedNavGroups, setExpandedNavGroups] = useState(() =>
-    navigationGroups.reduce((acc, group) => {
-      acc[group.id] = true;
+  const [expandedNavGroups, setExpandedNavGroups] = useState(() => {
+    const initialView = getInitialView();
+    return navigationGroups.reduce((acc, group) => {
+      acc[group.id] = group.items.some(item => item.id === initialView);
       return acc;
-    }, {})
-  );
+    }, {});
+  });
 
   function toggleNavGroup(groupId) {
-    setExpandedNavGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+    setExpandedNavGroups((prev) => {
+      const isCurrentlyOpen = prev[groupId] !== false;
+      // Close all, then open the clicked one only if it was closed
+      const next = {};
+      for (const key of Object.keys(prev)) {
+        next[key] = false;
+      }
+      if (isCurrentlyOpen) {
+        // clicking an open group closes it (all remain closed)
+        return next;
+      }
+      next[groupId] = true;
+      return next;
+    });
   }
 
   const [activeView, setActiveView] = useState(getInitialView);
@@ -2987,6 +3017,17 @@ function MainApp({ auth, onLogout }) {
     setActiveView(view);
     window.location.hash = view;
     setIsMobileMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Open the group that contains this view, close all others
+    const group = navigationGroups.find(g => g.items.some(item => item.id === view));
+    if (group) {
+      setExpandedNavGroups(prev => {
+        const next = {};
+        for (const key of Object.keys(prev)) next[key] = false;
+        next[group.id] = true;
+        return next;
+      });
+    }
   }
 
   function goBack() {
@@ -4027,6 +4068,7 @@ function MainApp({ auth, onLogout }) {
     else if (deleteTarget.type === 'rmp') rmpCrud.confirmDelete();
     else if (deleteTarget.type === 'rmc') rmcCrud.confirmDelete();
     else if (deleteTarget.type === 'sup') supCrud.confirmDelete();
+    else if (deleteTarget.type === 'cus') cusCrud.confirmDelete();
     else if (deleteTarget.type === 'mmp') mmpCrud.confirmDelete();
     else if (deleteTarget.type === 'msc') mscCrud.confirmDelete();
     else if (deleteTarget.type === 'pay') payCrud.confirmDelete();
@@ -5069,6 +5111,8 @@ function MainApp({ auth, onLogout }) {
                     <strong>{item.name}</strong>
                     {item.code ? <span className="meta">كود: {item.code}</span> : null}
                     {item.phone ? <span className="meta">{item.phone}</span> : null}
+                    {item.governorate ? <span className="meta">{item.governorate}</span> : null}
+                    {item.registrationDate ? <span className="meta">تاريخ التسجيل: {item.registrationDate}</span> : null}
                   </div>
                   {item.address ? <p>{item.address}</p> : null}
                   {item.notes ? <p>{item.notes}</p> : <p>—</p>}
@@ -5085,6 +5129,39 @@ function MainApp({ auth, onLogout }) {
               <label><span>كود العميل</span><input name="code" value={cusForm.code} onChange={cusCrud.handleInput} /></label>
               <label><span>اسم العميل</span><input name="name" value={cusForm.name} onChange={cusCrud.handleInput} required /></label>
               <label><span>رقم الهاتف</span><input name="phone" value={cusForm.phone} onChange={cusCrud.handleInput} /></label>
+              <label><span>المحافظة</span>
+                <select name="governorate" value={cusForm.governorate} onChange={cusCrud.handleInput}>
+                  <option value="">-- اختر المحافظة --</option>
+                  <option>القاهرة</option>
+                  <option>الجيزة</option>
+                  <option>الإسكندرية</option>
+                  <option>الدقهلية</option>
+                  <option>البحيرة</option>
+                  <option>الغربية</option>
+                  <option>المنوفية</option>
+                  <option>القليوبية</option>
+                  <option>الشرقية</option>
+                  <option>كفر الشيخ</option>
+                  <option>دمياط</option>
+                  <option>بورسعيد</option>
+                  <option>الإسماعيلية</option>
+                  <option>السويس</option>
+                  <option>شمال سيناء</option>
+                  <option>جنوب سيناء</option>
+                  <option>الفيوم</option>
+                  <option>بني سويف</option>
+                  <option>المنيا</option>
+                  <option>أسيوط</option>
+                  <option>سوهاج</option>
+                  <option>قنا</option>
+                  <option>الأقصر</option>
+                  <option>أسوان</option>
+                  <option>البحر الأحمر</option>
+                  <option>الوادي الجديد</option>
+                  <option>مطروح</option>
+                </select>
+              </label>
+              <label><span>تاريخ التسجيل</span><input type="date" name="registrationDate" value={cusForm.registrationDate} onChange={cusCrud.handleInput} /></label>
               <label className="full-width"><span>العنوان</span><input name="address" value={cusForm.address} onChange={cusCrud.handleInput} /></label>
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={cusForm.notes} onChange={cusCrud.handleInput} /></label>
             </>}
@@ -5328,8 +5405,8 @@ function MainApp({ auth, onLogout }) {
               <label><span>وصف المصروف</span><input name="description" value={mscForm.description} onChange={mscCrud.handleInput} required /></label>
               <label><span>القيمة</span><input name="amount" type="number" min="0" step="0.01" value={mscForm.amount} onChange={mscCrud.handleInput} required /></label>
               <label><span>التصنيف</span><input name="category" value={mscForm.category} onChange={mscCrud.handleInput} placeholder="مثال: نقل، أدوات مكتبية.." /></label>
-              <label><span>التاريخ</span><input name="purchaseDate" type="date" value={mscForm.purchaseDate} onChange={mscCrud.handleInput} /></label>
-              <label><span>رقم الإيصال</span><input name="receiptNumber" value={mscForm.receiptNumber} onChange={mscCrud.handleInput} /></label>
+              <label><span>التاريخ</span><input name="purchaseDate" type="date" value={mscForm.purchaseDate} onChange={mscCrud.handleInput} required /></label>
+              <label><span>رقم الإيصال</span><input name="receiptNumber" value={mscForm.receiptNumber} onChange={mscCrud.handleInput} required /></label>
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={mscForm.notes} onChange={mscCrud.handleInput} /></label>
             </>}
           />
@@ -5400,7 +5477,14 @@ function MainApp({ auth, onLogout }) {
               <label><span>اسم الموظف</span><input name="employeeName" value={payForm.employeeName} onChange={payCrud.handleInput} required /></label>
               <label><span>النوع</span><select name="type" value={payForm.type} onChange={payCrud.handleInput}>{payrollTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></label>
               <label><span>المبلغ</span><input name="amount" type="number" min="0" step="0.01" value={payForm.amount} onChange={payCrud.handleInput} required /></label>
-              <label><span>الشهر</span><input name="month" value={payForm.month} onChange={payCrud.handleInput} placeholder="مثال: أبريل 2026" /></label>
+              <label><span>الشهر</span><select name="month" value={payForm.month} onChange={payCrud.handleInput}>
+                <option value="">— اختر الشهر —</option>
+                {['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'].map(m => {
+                  const year = new Date().getFullYear();
+                  const val = `${m} ${year}`;
+                  return <option key={m} value={val}>{val}</option>;
+                })}
+              </select></label>
               <label><span>الحالة</span><select name="status" value={payForm.status} onChange={payCrud.handleInput}>{payrollStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={payForm.notes} onChange={payCrud.handleInput} /></label>
             </>}

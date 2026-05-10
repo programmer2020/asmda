@@ -864,12 +864,12 @@ textarea {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 10px;
 }
 
 .form-grid label {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .full-width {
@@ -1250,7 +1250,7 @@ textarea {
   }
 
   .modal-content {
-    padding: 24px;
+    padding: 16px 16px;
     border-radius: 20px;
     max-height: calc(100vh - 32px);
   }
@@ -1285,7 +1285,7 @@ textarea {
   background: var(--panel);
   box-shadow: var(--shadow);
   border: 1px solid var(--line);
-  padding: 32px;
+  padding: 20px 24px;
   animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1325,6 +1325,20 @@ textarea {
   color: #000;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   transform: scale(1.05);
+}
+
+.modal-content input,
+.modal-content textarea,
+.modal-content select {
+  padding: 8px 12px;
+}
+
+.modal-content .form-actions {
+  margin-top: 4px;
+}
+
+.modal-content textarea {
+  min-height: 56px;
 }
 
 /* Table Actions Header */
