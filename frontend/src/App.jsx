@@ -1056,6 +1056,29 @@ function getInitialView() {
   return views.includes(hash) ? hash : 'dashboard';
 }
 
+// Excel export utility using SheetJS
+function exportToExcel(rows, filename = 'تصدير', sheetName = 'البيانات') {
+  if (!rows || rows.length === 0) return;
+  import('xlsx').then(XLSX => {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, `${filename}.xlsx`);
+  });
+}
+
+function mapItemsForExport(items, columns) {
+  return items.map(item => {
+    const row = {};
+    columns.forEach(({ key, label }) => {
+      let val = item[key];
+      if (val === null || val === undefined) val = '';
+      row[label] = val;
+    });
+    return row;
+  });
+}
+
 function formatMoney(value, decimals = 0) {
   return new Intl.NumberFormat('ar-EG', {
     style: 'currency',
@@ -1372,9 +1395,15 @@ function PlaceholderModuleView({ title, description }) {
   );
 }
 
-function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, renderRow, form, editingId, saving, isFormOpen, onOpenForm, onCloseForm, onSubmit, formTitle, formFields, onBack, extraActions, addDisabled = false, addDisabledHint = '', addDisabledTitle = '', formError = '' }) {
+function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, renderRow, form, editingId, saving, isFormOpen, onOpenForm, onCloseForm, onSubmit, formTitle, formFields, onBack, extraActions, addDisabled = false, addDisabledHint = '', addDisabledTitle = '', formError = '', exportColumns = null, exportFilename = 'تصدير' }) {
   const reversedItems = [...(data.items || [])].reverse();
   const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
+
+  function handleExport() {
+    const rows = mapItemsForExport(data.items || [], exportColumns);
+    exportToExcel(rows, exportFilename);
+  }
+
   return (
     <>
       <SummaryCards items={data.overview} />
@@ -1387,6 +1416,12 @@ function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, render
             </div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               {extraActions}
+              {exportColumns && (
+                <button type="button" className="ghost-button small" onClick={handleExport} title="تصدير إلى Excel" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 16l-4-4h3V4h2v8h3l-4 4z"/><path d="M4 18h16v2H4z"/></svg>
+                  Excel
+                </button>
+              )}
               {addDisabled && addDisabledHint ? <span style={{ color: 'var(--muted)', fontSize: '0.86rem' }}>{addDisabledHint}</span> : null}
               <button type="button" className="primary-button" onClick={onOpenForm} disabled={addDisabled} title={addDisabled ? addDisabledTitle : undefined}>{addLabel}</button>
               {onBack && (
@@ -1484,7 +1519,22 @@ function ExpensesReportView({ custodies, rawPurchases, machinePurchases, miscPur
           <p className="eyebrow">التقارير المالية</p>
           <h3>تقرير المصروفات</h3>
         </div>
-        <button type="button" className="ghost-button small" onClick={() => window.print()}>طباعة</button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button type="button" className="ghost-button small" onClick={() => {
+            const exportRows = [
+              ...salaries.map(r => ({'النوع': 'مرتبات', 'البيان': r.employeeName, 'المبلغ': r.amount, 'التفصيل': r.type, 'التاريخ': r.month||''})),
+              ...advances.map(r => ({'النوع': 'سلف', 'البيان': r.employeeName, 'المبلغ': r.amount, 'التفصيل': r.type, 'التاريخ': r.month||''})),
+              ...rawItems.map(r => ({'النوع': 'خامات', 'البيان': r.materialName, 'المبلغ': r.totalAmount, 'التفصيل': r.supplierName, 'التاريخ': r.purchaseDate||''})),
+              ...machineItems.map(r => ({'النوع': 'صيانة', 'البيان': r.description, 'المبلغ': r.amount, 'التفصيل': r.machineName||'', 'التاريخ': r.purchaseDate||''})),
+              ...miscItems.map(r => ({'النوع': 'نثريات', 'البيان': r.description, 'المبلغ': r.amount, 'التفصيل': r.category||'', 'التاريخ': r.purchaseDate||''})),
+            ];
+            exportToExcel(exportRows, 'تقرير المصروفات');
+          }} title="تصدير إلى Excel" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 16l-4-4h3V4h2v8h3l-4 4z"/><path d="M4 18h16v2H4z"/></svg>
+            Excel
+          </button>
+          <button type="button" className="ghost-button small" onClick={() => window.print()}>طباعة</button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -1751,7 +1801,17 @@ function RepReportView({ sales, creditSales, returns, salesRepOptions }) {
           <p className="eyebrow">تقارير المناديب</p>
           <h3>تقرير حركة المندوب</h3>
         </div>
-        <button type="button" className="ghost-button small" onClick={() => window.print()}>طباعة</button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button type="button" className="ghost-button small" onClick={() => {
+            const activeRows = activeTab === 'sales' ? salesRows.map(r => ({'العميل': r.customerName, 'المنتج': r.productName||'', 'المبلغ': r.amount, 'المندوب': r.salesRep, 'التاريخ': r.saleDate||''})) : activeTab === 'credit' ? creditRows.map(r => ({'العميل': r.customerName, 'الفاتورة': r.invoiceNumber||'', 'المدفوع': r.paidAmount, 'المتبقي': r.remainingAmount, 'المندوب': r.salesRep})) : returnRows.map(r => ({'العميل': r.customerName, 'المنتج': r.productName||'', 'المبلغ': r.amount, 'المندوب': r.salesRep, 'التاريخ': r.returnDate||''}));
+            const tabName = activeTab === 'sales' ? 'مبيعات' : activeTab === 'credit' ? 'تحصيلات' : 'مرتجعات';
+            exportToExcel(activeRows, `تقرير المندوب - ${tabName}`);
+          }} title="تصدير إلى Excel" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 16l-4-4h3V4h2v8h3l-4 4z"/><path d="M4 18h16v2H4z"/></svg>
+            Excel
+          </button>
+          <button type="button" className="ghost-button small" onClick={() => window.print()}>طباعة</button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -1950,7 +2010,13 @@ function GovernorateReportView({ customers, sales, creditSales, returns }) {
           <p className="eyebrow">تقارير المديونية</p>
           <h3>تقرير مديونية العملاء بالمحافظة</h3>
         </div>
-        <button type="button" className="ghost-button small" onClick={() => window.print()}>طباعة</button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button type="button" className="ghost-button small" onClick={() => exportToExcel(rows.map(r => ({'الاسم': r.name, 'المحافظة': r.governorate, 'المبيعات': r.sales, 'التحصيلات': r.collections, 'المرتجعات': r.returns, 'المديونية': r.sales - r.collections - r.returns})), 'مديونية المحافظات')} title="تصدير إلى Excel" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 16l-4-4h3V4h2v8h3l-4 4z"/><path d="M4 18h16v2H4z"/></svg>
+            Excel
+          </button>
+          <button type="button" className="ghost-button small" onClick={() => window.print()}>طباعة</button>
+        </div>
       </div>
 
       <div style={{ marginBottom: '16px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -2278,9 +2344,15 @@ function SalesView({
               <p className="eyebrow">سجلات المبيعات</p>
               <h3>إدارة العمليات الحالية</h3>
             </div>
-            <button type="button" className="primary-button" onClick={onOpenForm}>
-              إضافة عملية بيع
-            </button>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button type="button" className="ghost-button small" onClick={() => exportToExcel(mapItemsForExport(sales.items||[],[{key:'customerName',label:'العميل'},{key:'invoiceNumber',label:'رقم الفاتورة'},{key:'amount',label:'المبلغ'},{key:'status',label:'الحالة'},{key:'salesRep',label:'المندوب'},{key:'saleDate',label:'التاريخ'},{key:'notes',label:'ملاحظات'}]),'المبيعات')} title="تصدير إلى Excel" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 16l-4-4h3V4h2v8h3l-4 4z"/><path d="M4 18h16v2H4z"/></svg>
+                Excel
+              </button>
+              <button type="button" className="primary-button" onClick={onOpenForm}>
+                إضافة عملية بيع
+              </button>
+            </div>
           </div>
 
           <div className="table-list">
@@ -2487,9 +2559,15 @@ function CreditSalesView({
               <p className="eyebrow">سجلات مبيعات الآجل</p>
               <h3>إدارة التحصيل والمتابعة</h3>
             </div>
-            <button type="button" className="primary-button" onClick={onOpenForm}>
-              إضافة سجل آجل
-            </button>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button type="button" className="ghost-button small" onClick={() => exportToExcel(mapItemsForExport(creditSales.items||[],[{key:'customerName',label:'العميل'},{key:'invoiceNumber',label:'رقم الفاتورة'},{key:'amount',label:'المبلغ'},{key:'paidAmount',label:'المدفوع'},{key:'remainingAmount',label:'المتبقي'},{key:'dueDate',label:'تاريخ الاستحقاق'},{key:'status',label:'الحالة'},{key:'salesRep',label:'المندوب'},{key:'notes',label:'ملاحظات'}]),'مبيعات الآجل')} title="تصدير إلى Excel" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 16l-4-4h3V4h2v8h3l-4 4z"/><path d="M4 18h16v2H4z"/></svg>
+                Excel
+              </button>
+              <button type="button" className="primary-button" onClick={onOpenForm}>
+                إضافة سجل آجل
+              </button>
+            </div>
           </div>
 
           <div className="table-list">
@@ -2704,9 +2782,15 @@ function ReturnsView({
               <p className="eyebrow">سجلات المرتجعات</p>
               <h3>إدارة ومراجعة البضائع المرتجعة</h3>
             </div>
-            <button type="button" className="primary-button" onClick={onOpenForm}>
-              إضافة مرتجع
-            </button>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button type="button" className="ghost-button small" onClick={() => exportToExcel(mapItemsForExport(returns.items||[],[{key:'customerName',label:'العميل'},{key:'productName',label:'المنتج'},{key:'amount',label:'المبلغ'},{key:'status',label:'الحالة'},{key:'salesRep',label:'المندوب'},{key:'returnDate',label:'التاريخ'},{key:'notes',label:'ملاحظات'}]),'المرتجعات')} title="تصدير إلى Excel" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 16l-4-4h3V4h2v8h3l-4 4z"/><path d="M4 18h16v2H4z"/></svg>
+                Excel
+              </button>
+              <button type="button" className="primary-button" onClick={onOpenForm}>
+                إضافة مرتجع
+              </button>
+            </div>
           </div>
 
           <div className="table-list">
@@ -3096,9 +3180,15 @@ function ChecksView({
                 <p className="eyebrow">سجل الشيكات</p>
                 <h3>إدارة الشيكات ومواعيد التحصيل</h3>
               </div>
-              <button type="button" className="primary-button" onClick={onOpenForm}>
-                إضافة شيك
-              </button>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button type="button" className="ghost-button small" onClick={() => exportToExcel(mapItemsForExport(checks.items||[],[{key:'customerName',label:'العميل'},{key:'checkNumber',label:'رقم الشيك'},{key:'bankName',label:'البنك'},{key:'amount',label:'المبلغ'},{key:'collectionDate',label:'تاريخ التحصيل'},{key:'status',label:'الحالة'},{key:'notes',label:'ملاحظات'}]),'الشيكات')} title="تصدير إلى Excel" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 16l-4-4h3V4h2v8h3l-4 4z"/><path d="M4 18h16v2H4z"/></svg>
+                  Excel
+                </button>
+                <button type="button" className="primary-button" onClick={onOpenForm}>
+                  إضافة شيك
+                </button>
+              </div>
             </div>
 
             <div className="table-list">
@@ -5189,6 +5279,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة صنف جديد"
             emptyLabel="لا توجد أصناف مسجلة بعد. أضف صنفاً لتتمكن من استخدامه في المخازن."
             formTitle="صنف"
+            exportColumns={[{key:'productName',label:'الصنف'},{key:'code',label:'الكود'},{key:'category',label:'التصنيف'},{key:'unit',label:'الوحدة'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="كبون الأصناف"
             editingId={pcEditingId}
             saving={pcSaving}
             isFormOpen={pcFormOpen}
@@ -5258,6 +5350,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة منتج"
             emptyLabel="لا توجد منتجات مسجلة بعد."
             formTitle="منتج"
+            exportColumns={[{key:'productName',label:'المنتج'},{key:'category',label:'التصنيف'},{key:'quantity',label:'الكمية'},{key:'unit',label:'الوحدة'},{key:'minStock',label:'الحد الأدنى'},{key:'status',label:'الحالة'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="مخزن المنتج النهائي"
             editingId={fpEditingId}
             saving={fpSaving}
             isFormOpen={fpFormOpen}
@@ -5326,6 +5420,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة خامة"
             emptyLabel="لا توجد خامات مسجلة بعد."
             formTitle="خامة"
+            exportColumns={[{key:'materialName',label:'الخامة'},{key:'category',label:'التصنيف'},{key:'quantity',label:'الكمية'},{key:'unit',label:'الوحدة'},{key:'minStock',label:'الحد الأدنى'},{key:'status',label:'الحالة'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="مخزن الخامات"
             editingId={rmEditingId}
             saving={rmSaving}
             isFormOpen={rmFormOpen}
@@ -5394,6 +5490,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="نقل من مخزن المنتج النهائي"
             emptyLabel="لا توجد سجلات بعد."
             formTitle="سجل مندوب"
+            exportColumns={[{key:'repName',label:'المندوب'},{key:'productName',label:'المنتج'},{key:'quantity',label:'الكمية'},{key:'deliveryDate',label:'تاريخ التسليم'},{key:'status',label:'الحالة'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="مخازن المناديب"
             editingId={rssEditingId}
             saving={rssSaving}
             isFormOpen={rssFormOpen}
@@ -5491,6 +5589,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة عهدة"
             emptyLabel="لا توجد عهد مسجلة بعد."
             formTitle="عهدة"
+            exportColumns={[{key:'employeeName',label:'الموظف'},{key:'amount',label:'المبلغ'},{key:'purpose',label:'الغرض'},{key:'custodyDate',label:'التاريخ'},{key:'status',label:'الحالة'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="عهدة المدير المالي"
             editingId={fmcEditingId}
             saving={fmcSaving}
             isFormOpen={fmcFormOpen}
@@ -5607,6 +5707,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة خامة"
             emptyLabel="لا توجد خامات مسجلة بعد."
             formTitle="خامة"
+            exportColumns={[{key:'name',label:'الخامة'},{key:'category',label:'التصنيف'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="قائمة الخامات"
             editingId={rmcEditingId}
             saving={rmcSaving}
             isFormOpen={rmcFormOpen}
@@ -5648,6 +5750,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة مورد"
             emptyLabel="لا يوجد موردون مسجلون بعد."
             formTitle="مورد"
+            exportColumns={[{key:'name',label:'الاسم'},{key:'code',label:'الكود'},{key:'phone',label:'التليفون'},{key:'address',label:'العنوان'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="الموردون"
             editingId={supEditingId}
             saving={supSaving}
             isFormOpen={supFormOpen}
@@ -5689,6 +5793,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة عميل"
             emptyLabel="لا يوجد عملاء مسجلون بعد."
             formTitle="عميل"
+            exportColumns={[{key:'code',label:'الكود'},{key:'name',label:'الاسم'},{key:'phone',label:'التليفون'},{key:'address',label:'العنوان'},{key:'governorate',label:'المحافظة'},{key:'registrationDate',label:'تاريخ التسجيل'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="العملاء"
             editingId={cusEditingId}
             saving={cusSaving}
             isFormOpen={cusFormOpen}
@@ -5769,6 +5875,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة فاتورة شراء"
             emptyLabel="لا توجد فواتير مشتريات بعد."
             formTitle="فاتورة شراء"
+            exportColumns={[{key:'supplierName',label:'المورد'},{key:'materialName',label:'الخامة'},{key:'quantity',label:'الكمية'},{key:'unitPrice',label:'سعر الوحدة'},{key:'totalAmount',label:'الإجمالي'},{key:'purchaseDate',label:'التاريخ'},{key:'invoiceNumber',label:'رقم الفاتورة'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="مشتريات الخامات"
             editingId={rmpEditingId}
             saving={rmpSaving}
             isFormOpen={rmpFormOpen}
@@ -5860,6 +5968,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة عملية صيانة"
             emptyLabel="لا توجد عمليات صيانة مسجلة بعد."
             formTitle="عملية صيانة"
+            exportColumns={[{key:'supplierName',label:'المورد'},{key:'description',label:'البيان'},{key:'machineName',label:'الماكينة'},{key:'amount',label:'المبلغ'},{key:'purchaseDate',label:'التاريخ'},{key:'invoiceNumber',label:'رقم الفاتورة'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="صيانة الماكينات"
             editingId={mmpEditingId}
             saving={mmpSaving}
             isFormOpen={mmpFormOpen}
@@ -5942,6 +6052,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة مصروف"
             emptyLabel="لا توجد مصروفات مسجلة بعد."
             formTitle="مصروف"
+            exportColumns={[{key:'description',label:'البيان'},{key:'category',label:'التصنيف'},{key:'amount',label:'المبلغ'},{key:'purchaseDate',label:'التاريخ'},{key:'receiptNumber',label:'رقم الإيصال'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="المصروفات النثرية"
             editingId={mscEditingId}
             saving={mscSaving}
             isFormOpen={mscFormOpen}
@@ -6013,6 +6125,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة سجل"
             emptyLabel="لا توجد سجلات رواتب أو سلف بعد."
             formTitle="سجل"
+            exportColumns={[{key:'employeeName',label:'الموظف'},{key:'type',label:'النوع'},{key:'amount',label:'المبلغ'},{key:'month',label:'الشهر'},{key:'status',label:'الحالة'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="الرواتب والسلف"
             editingId={payEditingId}
             saving={paySaving}
             isFormOpen={payFormOpen}
@@ -6092,6 +6206,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة تنبيه"
             emptyLabel="لا توجد تنبيهات مسجلة بعد."
             formTitle="تنبيه"
+            exportColumns={[{key:'customerName',label:'العميل'},{key:'amount',label:'المبلغ'},{key:'dueDate',label:'تاريخ الاستحقاق'},{key:'alertType',label:'نوع التنبيه'},{key:'status',label:'الحالة'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="تنبيهات الدفع"
             editingId={cpaEditingId}
             saving={cpaSaving}
             isFormOpen={cpaFormOpen}
@@ -6138,6 +6254,8 @@ function MainApp({ auth, onLogout }) {
             addLabel="إضافة عينة"
             emptyLabel="لا توجد عينات مسجلة بعد."
             formTitle="عينة مجانية"
+            exportColumns={[{key:'customerName',label:'العميل'},{key:'productName',label:'المنتج'},{key:'quantity',label:'الكمية'},{key:'unit',label:'الوحدة'},{key:'unitPrice',label:'سعر الوحدة'},{key:'reason',label:'السبب'},{key:'sampleDate',label:'التاريخ'},{key:'notes',label:'ملاحظات'}]}
+            exportFilename="العينات المجانية"
             editingId={fsEditingId}
             saving={fsSaving}
             isFormOpen={fsFormOpen}
