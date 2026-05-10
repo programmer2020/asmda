@@ -10,12 +10,51 @@ const dashboardBrand = {
   secondaryAction: 'فتح صفحة مبيعات الآجل'
 };
 
+function normalizeSaleItems(items, fallbackProductName = '', fallbackAmount = 0) {
+  const rawItems = Array.isArray(items) && items.length > 0
+    ? items
+    : String(fallbackProductName || '').trim()
+      ? [{ productName: fallbackProductName, qty: 1, unitPrice: Number(fallbackAmount || 0), lineTotal: Number(fallbackAmount || 0) }]
+      : [];
+
+  return rawItems
+    .map((item) => {
+      const productName = String(item?.productName || '').trim();
+      const qty = Math.max(1, Number(item?.qty || 1));
+      const hasUnitPrice = item?.unitPrice !== undefined && item?.unitPrice !== null && item?.unitPrice !== '';
+      const rawUnitPrice = hasUnitPrice ? Number(item.unitPrice) : qty > 0 ? Number(item?.lineTotal || 0) / qty : 0;
+      const unitPrice = Number.isFinite(rawUnitPrice) ? rawUnitPrice : 0;
+      const lineTotal = qty * unitPrice;
+      return { productName, qty, unitPrice, lineTotal };
+    })
+    .filter((item) => item.productName);
+}
+
+function summarizeSaleItems(items, fallbackProductName = '') {
+  const names = items.map((item) => item.productName).filter(Boolean);
+  if (names.length === 0) {
+    return String(fallbackProductName || '').trim();
+  }
+  if (names.length === 1) {
+    return names[0];
+  }
+  return `${names[0]} + ${names.length - 1} أصناف`;
+}
+
+function sumSaleItems(items, fallbackAmount = 0) {
+  const total = items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0);
+  return total > 0 ? total : Number(fallbackAmount || 0);
+}
+
 function mapSale(row) {
+  const items = normalizeSaleItems(row.items, row.product_name, row.amount);
+  const storedAmount = Number(row.amount || 0);
   return {
     id: row.id,
     customerName: row.customer_name,
-    productName: row.product_name,
-    amount: Number(row.amount),
+    productName: summarizeSaleItems(items, row.product_name),
+    items,
+    amount: storedAmount > 0 ? storedAmount : sumSaleItems(items, row.amount),
     status: row.status,
     salesRep: row.sales_rep,
     saleDate: row.sale_date ? new Date(row.sale_date).toISOString().split('T')[0] : null,
@@ -230,7 +269,7 @@ async function ensureRepStoreSalesLink(repName, productName) {
   const rep = String(repName || '').trim();
   const product = String(productName || '').trim();
   if (!rep || !product) {
-    throw new Error('يرجى اختيار المندوب والمنتج من مخازن المناديب.');
+    throw new Error('يرجى اختيار مسؤول المبيعات وصنف واحد على الأقل من مخازن المناديب.');
   }
 
   const linkResult = await query(
@@ -242,24 +281,38 @@ async function ensureRepStoreSalesLink(repName, productName) {
   );
 
   if (linkResult.rows.length === 0) {
-    throw new Error('المنتج المختار غير مرتبط بالمندوب في مخازن المناديب.');
+    throw new Error(`الصنف "${product}" غير مرتبط بمسؤول المبيعات المختار في مخازن المناديب.`);
+  }
+}
+
+async function ensureRepStoreSalesItems(repName, items) {
+  const normalizedItems = normalizeSaleItems(items);
+  if (!String(repName || '').trim() || normalizedItems.length === 0) {
+    throw new Error('يرجى اختيار مسؤول المبيعات وصنف واحد على الأقل من مخازن المناديب.');
+  }
+
+  for (const item of normalizedItems) {
+    await ensureRepStoreSalesLink(repName, item.productName);
   }
 }
 
 export async function createSalesRecord(payload) {
   const id = await nextId('SAL', 'direct_sales');
-  await ensureRepStoreSalesLink(payload.salesRep, payload.productName);
+  const items = normalizeSaleItems(payload.items, payload.productName, payload.amount);
+  const productSummary = summarizeSaleItems(items, payload.productName);
+  const amount = sumSaleItems(items, payload.amount);
   
   const text = `
     INSERT INTO direct_sales 
-    (id, customer_name, product_name, amount, status, sales_rep, sale_date, notes) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *
+    (id, customer_name, product_name, items, amount, status, sales_rep, sale_date, notes) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *
   `;
   const values = [
     id,
     payload.customerName || '',
-    payload.productName || '',
-    Number(payload.amount || 0),
+    productSummary,
+    JSON.stringify(items),
+    amount,
     payload.status || 'جديدة',
     payload.salesRep || '',
     payload.saleDate || null,
@@ -271,23 +324,27 @@ export async function createSalesRecord(payload) {
 }
 
 export async function updateSalesRecord(id, payload) {
-  await ensureRepStoreSalesLink(payload.salesRep, payload.productName);
+  const items = normalizeSaleItems(payload.items, payload.productName, payload.amount);
+  const productSummary = summarizeSaleItems(items, payload.productName);
+  const amount = sumSaleItems(items, payload.amount);
   const text = `
     UPDATE direct_sales SET 
       customer_name = COALESCE($2, customer_name),
       product_name = COALESCE($3, product_name),
-      amount = COALESCE($4, amount),
-      status = COALESCE($5, status),
-      sales_rep = COALESCE($6, sales_rep),
-      sale_date = COALESCE($7, sale_date),
-      notes = COALESCE($8, notes)
+      items = COALESCE($4, items),
+      amount = COALESCE($5, amount),
+      status = COALESCE($6, status),
+      sales_rep = COALESCE($7, sales_rep),
+      sale_date = COALESCE($8, sale_date),
+      notes = COALESCE($9, notes)
     WHERE id = $1 RETURNING *
   `;
   const values = [
     id,
     payload.customerName,
-    payload.productName,
-    payload.amount !== undefined ? Number(payload.amount) : undefined,
+    productSummary,
+    JSON.stringify(items),
+    amount,
     payload.status,
     payload.salesRep,
     payload.saleDate,
@@ -1393,9 +1450,18 @@ export async function deleteRawMaterialsCatalogRecord(id) {
 
 // ── Suppliers Catalog (Names) ─────────────────────────────────────────────────
 
+function mapSupplier(row) {
+  return {
+    id: row.id,
+    code: row.code || '',
+    name: row.name,
+    notes: row.notes || ''
+  };
+}
+
 export async function getSuppliersData() {
   const result = await query('SELECT * FROM suppliers_catalog ORDER BY created_at DESC');
-  const items = result.rows.map(mapCatalogItem);
+  const items = result.rows.map(mapSupplier);
   const overview = [
     { id: 'sup-count', label: 'عدد الموردين', value: items.length, type: 'number', helper: 'مورد مسجل', tone: 'calm' }
   ];
@@ -1408,10 +1474,10 @@ export async function createSupplierRecord(payload) {
   const id = nextCatalogId('SUP');
   try {
     const result = await query(
-      'INSERT INTO suppliers_catalog (id, name, notes) VALUES ($1,$2,$3) RETURNING *',
-      [id, name, payload.notes || '']
+      'INSERT INTO suppliers_catalog (id, code, name, notes) VALUES ($1,$2,$3,$4) RETURNING *',
+      [id, payload.code || '', name, payload.notes || '']
     );
-    return mapCatalogItem(result.rows[0]);
+    return mapSupplier(result.rows[0]);
   } catch (e) {
     if (e.code === '23505') throw new Error('اسم المورد مسجل بالفعل.');
     throw e;
@@ -1424,13 +1490,14 @@ export async function updateSupplierRecord(id, payload) {
   try {
     const result = await query(
       `UPDATE suppliers_catalog SET
-        name = COALESCE($2, name),
-        notes = COALESCE($3, notes)
+        code  = COALESCE($2, code),
+        name  = COALESCE($3, name),
+        notes = COALESCE($4, notes)
        WHERE id = $1 RETURNING *`,
-      [id, name, payload.notes]
+      [id, payload.code, name, payload.notes]
     );
     if (result.rows.length === 0) return null;
-    return mapCatalogItem(result.rows[0]);
+    return mapSupplier(result.rows[0]);
   } catch (e) {
     if (e.code === '23505') throw new Error('اسم المورد مسجل بالفعل.');
     throw e;
@@ -1791,6 +1858,73 @@ export async function updateProductCardRecord(id, payload) {
 
 export async function deleteProductCardRecord(id) {
   const result = await query('DELETE FROM product_cards WHERE id=$1 RETURNING id', [id]);
+  return result.rowCount > 0;
+}
+
+// ── Customers Catalog ─────────────────────────────────────────────────────────
+
+function mapCustomer(row) {
+  return {
+    id: row.id,
+    code: row.code || '',
+    name: row.name,
+    phone: row.phone || '',
+    address: row.address || '',
+    notes: row.notes || ''
+  };
+}
+
+export async function getCustomersData() {
+  const result = await query('SELECT * FROM customers_catalog ORDER BY created_at DESC');
+  const items = result.rows.map(mapCustomer);
+  const overview = [
+    { id: 'cust-count', label: 'عدد العملاء', value: items.length, type: 'number', helper: 'عميل مسجل', tone: 'calm' }
+  ];
+  return { overview, items };
+}
+
+export async function createCustomerRecord(payload) {
+  const code = String(payload.code || '').trim();
+  const name = String(payload.name || '').trim();
+  if (!name) throw new Error('يرجى إدخال اسم العميل.');
+  const id = `CUST-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  try {
+    const result = await query(
+      'INSERT INTO customers_catalog (id, code, name, phone, address, notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [id, code, name, payload.phone || '', payload.address || '', payload.notes || '']
+    );
+    return mapCustomer(result.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') throw new Error('اسم العميل مسجل بالفعل.');
+    throw e;
+  }
+}
+
+export async function updateCustomerRecord(id, payload) {
+  const code = payload.code !== undefined ? String(payload.code).trim() : undefined;
+  const name = payload.name !== undefined ? String(payload.name).trim() : undefined;
+  if (name !== undefined && !name) throw new Error('يرجى إدخال اسم العميل.');
+  try {
+    const result = await query(
+      `UPDATE customers_catalog SET
+        code    = COALESCE($2, code),
+        name    = COALESCE($3, name),
+        phone   = COALESCE($4, phone),
+        address = COALESCE($5, address),
+        notes   = COALESCE($6, notes)
+       WHERE id = $1 RETURNING *`,
+      [id, code, name, payload.phone, payload.address, payload.notes]
+    );
+    if (result.rows.length === 0) return null;
+    return mapCustomer(result.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') throw new Error('اسم العميل مسجل بالفعل.');
+    throw e;
+  }
+}
+
+export async function deleteCustomerRecord(id) {
+  const result = await query('DELETE FROM customers_catalog WHERE id=$1 RETURNING id', [id]);
   return result.rowCount > 0;
 }
 

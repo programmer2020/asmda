@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 
 // ─── API URL (for production and dev) ─────────────────────────────
 const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = API_URL.replace(/\/$/, '');
 
 // Global fetch wrapper: rewrite requests that start with `/api` to the full API_URL.
 // This lets the app keep using relative `/api/...` paths while deployed.
@@ -12,12 +13,12 @@ try {
     try {
       if (typeof input === 'string') {
         if (input.startsWith('/api')) {
-          input = `${API_URL}${input}`;
+          input = `${API_BASE}${input.slice(4)}`;
         }
       } else if (input instanceof Request) {
         const url = new URL(input.url, window.location.origin);
         if (url.pathname.startsWith('/api')) {
-          input = new Request(`${API_URL}${url.pathname}${url.search}`, input);
+          input = new Request(`${API_BASE}${url.pathname.slice(4)}${url.search}`, input);
         }
       }
     } catch (e) {
@@ -39,7 +40,10 @@ function getStoredAuth() {
     const payload = JSON.parse(atob(parsed.token.split('.')[1]));
     if (payload.exp * 1000 < Date.now()) { localStorage.removeItem('asmda_auth'); return null; }
     return parsed;
-  } catch { return null; }
+  } catch {
+    localStorage.removeItem('asmda_auth');
+    return null;
+  }
 }
 function storeAuth(data) { localStorage.setItem('asmda_auth', JSON.stringify(data)); }
 function clearAuth() { localStorage.removeItem('asmda_auth'); }
@@ -106,22 +110,28 @@ function LoginScreen({ onLogin }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    // تخطي التحقق: ادخل المستخدم مباشرة ببيانات وهمية
-    const fakeData = {
-      token: 'fake-token',
-      user: {
-        id: '1',
-        username,
-        displayName: username === 'admin' ? 'المدير' : username,
-        role: 'admin',
-        roleLabel: 'مدير النظام',
-        pages: ['dashboard','notifications','product-cards','final-product-store','raw-materials-packaging-store','raw-materials-catalog','suppliers','rep-sub-stores','reps-management','financial-manager-custody','raw-materials-purchases','machine-maintenance-purchases','misc-purchases','payroll-advances','sales','checks','returns','customer-payment-alerts','free-samples','credit-sales','price-list','custodies','statement']
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.message || 'تعذر تسجيل الدخول.');
+        return;
       }
-    };
-    storeAuth(fakeData);
-    onLogin(fakeData);
+      storeAuth(data);
+      onLogin(data);
+    } catch {
+      setError('تعذر الاتصال بالخادم.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -205,7 +215,7 @@ function UsersPage({ token }) {
   return (
     <section className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '20px' }}>
       {notice && <div className="notice success" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span>{notice}</span><button type="button" onClick={() => setNotice('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button></div>}
-      {error && <div className="notice error">{error}</div>}
+      {error && !formOpen ? <div className="notice error">{error}</div> : null}
       <article className="card table-card">
         <div className="table-actions-header">
           <div><p className="eyebrow">إدارة النظام</p><h3>المستخدمون والصلاحيات</h3></div>
@@ -235,8 +245,7 @@ function UsersPage({ token }) {
         <Pagination page={usersPage} totalPages={usersTotalPages} onPageChange={setUsersPage} pageSize={usersPageSize} onPageSizeChange={setUsersPageSize} />
       </article>
 
-      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingUser ? 'تعديل مستخدم' : 'إضافة مستخدم جديد'}>
-        {error && <div className="notice error" style={{ marginBottom: '12px' }}>{error}</div>}
+      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingUser ? 'تعديل مستخدم' : 'إضافة مستخدم جديد'} errorMessage={error}>
         <form className="form-grid" onSubmit={handleSubmit}>
           <label><span>الاسم الظاهر</span><input value={form.displayName} onChange={e => setForm(f => ({ ...f, displayName: e.target.value }))} required /></label>
           <label><span>كود المستخدم</span><input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="مثال: EMP-001" /></label>
@@ -351,7 +360,7 @@ function RepsPage({ token }) {
           <button type="button" onClick={() => setNotice('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
         </div>
       ) : null}
-      {error ? <div className="notice error">{error}</div> : null}
+      {error && !formOpen ? <div className="notice error">{error}</div> : null}
 
       <article className="card table-card">
         <div className="table-actions-header">
@@ -385,8 +394,7 @@ function RepsPage({ token }) {
         <Pagination page={repsPage} totalPages={repsTotalPages} onPageChange={setRepsPage} pageSize={repsPageSize} onPageSizeChange={setRepsPageSize} />
       </article>
 
-      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingRep ? 'تعديل مندوب' : 'إضافة مندوب جديد'}>
-        {error ? <div className="notice error" style={{ marginBottom: '12px' }}>{error}</div> : null}
+      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editingRep ? 'تعديل مندوب' : 'إضافة مندوب جديد'} errorMessage={error}>
         <form className="form-grid" onSubmit={handleSubmit}>
           <label><span>الاسم الظاهر</span><input value={form.displayName} onChange={(e) => setForm((current) => ({ ...current, displayName: e.target.value }))} required /></label>
           <label><span>كود المندوب</span><input value={form.code} onChange={(e) => setForm((current) => ({ ...current, code: e.target.value }))} placeholder="مثال: REP-001" /></label>
@@ -671,6 +679,7 @@ const views = [
   'raw-materials-packaging-store',
   'raw-materials-catalog',
   'suppliers',
+  'customers',
   'rep-sub-stores',
   'financial-manager-custody',
   'raw-materials-purchases',
@@ -718,6 +727,11 @@ const navigation = [
     id: 'suppliers',
     label: 'تسجيل الموردين',
     helper: 'إدارة أسماء الموردين المعتمدين'
+  },
+  {
+    id: 'customers',
+    label: 'تسجيل العملاء',
+    helper: 'إدارة بيانات وارقام العملاء المعتمدين'
   },
   {
     id: 'rep-sub-stores',
@@ -810,7 +824,7 @@ const navigationGroups = [
   {
     id: 'catalog-and-stores',
     label: 'الأصناف والمخازن',
-    items: ['product-cards', 'final-product-store', 'raw-materials-packaging-store', 'raw-materials-catalog', 'suppliers', 'rep-sub-stores']
+    items: ['product-cards', 'final-product-store', 'raw-materials-packaging-store', 'raw-materials-catalog', 'suppliers', 'customers', 'rep-sub-stores']
   },
   {
     id: 'custodies-and-purchases',
@@ -926,19 +940,22 @@ const initialFinManagerCustody = { overview: [], items: [] };
 const initialRawPurchases = { overview: [], items: [] };
 const initialRawMaterialsCatalog = { overview: [], items: [] };
 const initialSuppliers = { overview: [], items: [] };
+const initialCustomers = { overview: [], items: [] };
 const initialMachinePurchases = { overview: [], items: [] };
 const initialMiscPurchases = { overview: [], items: [] };
 const initialPayrollAdvances = { overview: [], items: [] };
 const initialPaymentAlerts = { overview: [], items: [] };
 const initialFreeSamples = { overview: [], items: [] };
 
+const initialSalesItem = { productName: '', qty: '1', unitPrice: '', lineTotal: 0 };
 const initialFinalProductForm = { productName: '', category: '', quantity: '', unit: 'قطعة', minStock: '', status: 'متوفر', notes: '' };
 const initialRawMaterialForm = { materialName: '', category: '', quantity: '', unit: 'كجم', minStock: '', status: 'متوفر', notes: '' };
 const initialRepSubStoreForm = { repName: '', productName: '', quantity: '', deliveryDate: '', status: 'مسلّم', notes: '' };
 const initialFinManagerCustodyForm = { employeeName: '', amount: '', purpose: '', custodyDate: '', status: 'نشطة', notes: '' };
 const initialRawPurchaseForm = { supplierName: '', materialName: '', quantity: '', unitPrice: '', purchaseDate: '', invoiceNumber: '', notes: '' };
 const initialRawMaterialCatalogForm = { name: '', category: '', notes: '' };
-const initialSupplierForm = { name: '', notes: '' };
+const initialSupplierForm = { code: '', name: '', notes: '' };
+const initialCustomerForm = { code: '', name: '', phone: '', address: '', notes: '' };
 const initialMachinePurchaseForm = { supplierName: '', description: '', amount: '', purchaseDate: '', machineName: '', invoiceNumber: '', notes: '' };
 const initialMiscPurchaseForm = { description: '', amount: '', category: '', purchaseDate: '', receiptNumber: '', notes: '' };
 const initialPayrollAdvanceForm = { employeeName: '', type: 'راتب', amount: '', month: '', status: 'معلق', notes: '' };
@@ -947,8 +964,7 @@ const initialFreeSampleForm = { customerName: '', productName: '', quantity: '1'
 
 const initialSalesForm = {
   customerName: '',
-  productName: '',
-  amount: '',
+  items: [{ ...initialSalesItem }],
   status: 'جديدة',
   salesRep: '',
   saleDate: '',
@@ -1128,10 +1144,39 @@ function getCheckStatusTone(status) {
 }
 
 function Modal({ isOpen, onClose, title, children, errorMessage = '' }) {
+  const [clientValidationMessage, setClientValidationMessage] = useState('');
+
+  useEffect(() => {
+    setClientValidationMessage('');
+  }, [isOpen, title]);
+
   if (!isOpen) return null;
+
+  const visibleErrorMessage = errorMessage || clientValidationMessage;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-content"
+        onClick={(e) => e.stopPropagation()}
+        onInvalidCapture={(event) => {
+          const validationMessage = event.target?.validationMessage;
+          if (validationMessage) {
+            event.preventDefault();
+            setClientValidationMessage(validationMessage);
+          }
+        }}
+        onInputCapture={() => {
+          if (clientValidationMessage) {
+            setClientValidationMessage('');
+          }
+        }}
+        onChangeCapture={() => {
+          if (clientValidationMessage) {
+            setClientValidationMessage('');
+          }
+        }}
+      >
         <button className="modal-close" onClick={onClose} aria-label="Close">
           &times;
         </button>
@@ -1140,7 +1185,7 @@ function Modal({ isOpen, onClose, title, children, errorMessage = '' }) {
             <h3>{title}</h3>
           </div>
         </div>
-        {errorMessage ? <section className="notice error" style={{ marginBottom: '16px' }}>{errorMessage}</section> : null}
+        {visibleErrorMessage ? <section className="notice error" style={{ marginBottom: '16px' }}>{visibleErrorMessage}</section> : null}
         {children}
       </div>
     </div>
@@ -1552,12 +1597,18 @@ function SalesView({
   onOpenForm,
   onCloseForm,
   onChange,
+  onItemAdd,
+  onItemRemove,
+  onItemChange,
   onSubmit,
   onEdit,
-  onDelete
+  onDelete,
+  formError = ''
 }) {
   const reversedItems = [...(sales.items || [])].reverse();
   const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
+  const formItems = form.items || [{ ...initialSalesItem }];
+  const total = formItems.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unitPrice || 0), 0);
   return (
     <>
       <SummaryCards items={sales.overview} />
@@ -1582,7 +1633,10 @@ function SalesView({
                     <strong>{item.customerName}</strong>
                     <span className={`status-chip ${getStatusTone(item.status)}`}>{item.status}</span>
                   </div>
-                  <p>{item.productName}</p>
+                  <p>
+                    {item.productName}
+                    {Array.isArray(item.items) && item.items.length > 1 ? ` · ${item.items.length} أصناف` : ''}
+                  </p>
                   <small>
                     {item.salesRep} - {formatDate(item.saleDate)}
                   </small>
@@ -1605,36 +1659,110 @@ function SalesView({
         </article>
       </section>
 
-      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل عملية بيع' : 'إضافة عملية بيع'}>
+      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل عملية بيع' : 'إضافة عملية بيع'} errorMessage={formError}>
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل</span>
             <select name="customerName" value={form.customerName} onChange={onChange} required>
-              <option value="">{salesRepOptions.length > 0 ? '— اختر عميلاً —' : 'لا يوجد عملاء متاحون'}</option>
-              {salesRepOptions.map((repName) => (
-                <option key={repName} value={repName}>{repName}</option>
+              <option value="">{customerOptions.length > 0 ? '— اختر عميلاً —' : 'لا يوجد عملاء متاحون'}</option>
+              {customerOptions.map((customerName) => (
+                <option key={customerName} value={customerName}>{customerName}</option>
               ))}
-              {form.customerName && !salesRepOptions.includes(form.customerName) ? (
+              {form.customerName && !customerOptions.includes(form.customerName) ? (
                 <option value={form.customerName}>{form.customerName}</option>
               ) : null}
             </select>
           </label>
           <label>
-            <span>اسم المنتج</span>
-            <select name="productName" value={form.productName} onChange={onChange} required>
-              <option value="">{salesProductOptions.length > 0 ? '— اختر منتجًا —' : 'لا توجد منتجات متاحة'}</option>
-              {salesProductOptions.map((productName) => (
-                <option key={productName} value={productName}>{productName}</option>
+            <span>مسؤول المبيعات</span>
+            <select name="salesRep" value={form.salesRep} onChange={onChange} required>
+              <option value="">{salesRepOptions.length > 0 ? '— اختر مسؤول المبيعات —' : 'لا يوجد مندوبون متاحون'}</option>
+              {salesRepOptions.map((repName) => (
+                <option key={repName} value={repName}>{repName}</option>
               ))}
-              {form.productName && !salesProductOptions.includes(form.productName) ? (
-                <option value={form.productName}>{form.productName}</option>
+              {form.salesRep && !salesRepOptions.includes(form.salesRep) ? (
+                <option value={form.salesRep}>{form.salesRep}</option>
               ) : null}
             </select>
           </label>
-          <label>
-            <span>القيمة</span>
-            <input name="amount" type="number" min="0" value={form.amount} onChange={onChange} />
-          </label>
+
+          <div className="full-width" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ background: '#f1f5f9', textAlign: 'right' }}>
+                  <th style={{ padding: '8px 10px' }}>الصنف</th>
+                  <th style={{ padding: '8px 10px', width: '80px' }}>الكمية</th>
+                  <th style={{ padding: '8px 10px', width: '120px' }}>سعر الوحدة</th>
+                  <th style={{ padding: '8px 10px', width: '110px', textAlign: 'left' }}>الإجمالي</th>
+                  <th style={{ padding: '8px 6px', width: '32px' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {formItems.map((item, index) => (
+                  <tr key={index} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '6px 10px' }}>
+                      <select
+                        value={item.productName}
+                        onChange={(event) => onItemChange(index, 'productName', event.target.value)}
+                        style={{ width: '100%' }}
+                        required
+                      >
+                        <option value="">{salesProductOptions.length > 0 ? '— اختر الصنف —' : 'لا توجد أصناف متاحة'}</option>
+                        {salesProductOptions.map((productName) => (
+                          <option key={productName} value={productName}>{productName}</option>
+                        ))}
+                        {item.productName && !salesProductOptions.includes(item.productName) ? (
+                          <option value={item.productName}>{item.productName}</option>
+                        ) : null}
+                      </select>
+                    </td>
+                    <td style={{ padding: '6px 10px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.qty}
+                        onChange={(event) => onItemChange(index, 'qty', event.target.value)}
+                        style={{ width: '100%' }}
+                        required
+                      />
+                    </td>
+                    <td style={{ padding: '6px 10px' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.unitPrice}
+                        onChange={(event) => onItemChange(index, 'unitPrice', event.target.value)}
+                        style={{ width: '100%' }}
+                        required
+                      />
+                    </td>
+                    <td style={{ padding: '6px 10px', textAlign: 'left' }}>
+                      {formatMoney(Number(item.qty || 0) * Number(item.unitPrice || 0))}
+                    </td>
+                    <td style={{ padding: '6px', textAlign: 'center' }}>
+                      {formItems.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => onItemRemove(index)}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}
+                        >×</button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button type="button" className="ghost-button small" onClick={onItemAdd} style={{ marginTop: '8px' }}>
+              + إضافة صنف
+            </button>
+          </div>
+
+          <div className="full-width" style={{ background: '#f8fafc', borderRadius: '8px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.95rem' }}>
+            <span>إجمالي الفاتورة</span>
+            <strong>{formatMoney(total)}</strong>
+          </div>
+
           <label>
             <span>الحالة</span>
             <select name="status" value={form.status} onChange={onChange}>
@@ -1686,7 +1814,8 @@ function CreditSalesView({
   salesRepOptions = [],
   onItemAdd,
   onItemRemove,
-  onItemChange
+  onItemChange,
+  formError = ''
 }) {
   const reversedItems = [...(creditSales.items || [])].reverse();
   const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
@@ -1748,7 +1877,7 @@ function CreditSalesView({
         </article>
       </section>
 
-      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل سجل آجل' : 'إضافة سجل آجل'}>
+      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل سجل آجل' : 'إضافة سجل آجل'} errorMessage={formError}>
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل</span>
@@ -1912,7 +2041,8 @@ function ReturnsView({
   onEdit,
   onDelete,
   productOptions = [],
-  supplierOptions = []
+  supplierOptions = [],
+  formError = ''
 }) {
   const reversedItems = [...(returns.items || [])].reverse();
   const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
@@ -1963,7 +2093,7 @@ function ReturnsView({
         </article>
       </section>
 
-      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل سجل المرتجع' : 'إضافة مرتجع جديد'}>
+      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل سجل المرتجع' : 'إضافة مرتجع جديد'} errorMessage={formError}>
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل</span>
@@ -2044,7 +2174,8 @@ function PriceListView({
   onChange,
   onSubmit,
   onEdit,
-  onDelete
+  onDelete,
+  formError = ''
 }) {
   const reversedItems = [...(priceList.items || [])].reverse();
   const { page, setPage, pageItems, totalPages, pageSize, setPageSize } = usePagination(reversedItems);
@@ -2105,7 +2236,7 @@ function PriceListView({
         </article>
       </section>
 
-      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل منتج' : 'إضافة منتج جديد'}>
+      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل منتج' : 'إضافة منتج جديد'} errorMessage={formError}>
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم المنتج</span>
@@ -2224,7 +2355,9 @@ function ChecksView({
   onCashSubmit,
   onCashEdit,
   onCashDelete,
-  supplierOptions = []
+  supplierOptions = [],
+  formError = '',
+  cashFormError = ''
 }) {
   const [activeTab, setActiveTab] = useState('checks');
   const today = getTodayLocalDateKey();
@@ -2404,7 +2537,7 @@ function ChecksView({
       )}
 
       {/* Check form modal */}
-      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل الشيك' : 'إضافة شيك جديد'}>
+      <Modal isOpen={isFormOpen} onClose={onCloseForm} title={editingId ? 'تعديل الشيك' : 'إضافة شيك جديد'} errorMessage={formError}>
         <form className="form-grid" onSubmit={onSubmit}>
           <label>
             <span>اسم العميل / الساحب</span>
@@ -2453,7 +2586,7 @@ function ChecksView({
       </Modal>
 
       {/* Cash form modal */}
-      <Modal isOpen={isCashFormOpen} onClose={onCloseCashForm} title={cashEditingId ? 'تعديل الدفعة النقدية' : 'إضافة دفعة نقدية'}>
+      <Modal isOpen={isCashFormOpen} onClose={onCloseCashForm} title={cashEditingId ? 'تعديل الدفعة النقدية' : 'إضافة دفعة نقدية'} errorMessage={cashFormError}>
         <form className="form-grid" onSubmit={onCashSubmit}>
           <label>
             <span>اسم العميل</span>
@@ -2586,6 +2719,7 @@ function MainApp({ auth, onLogout }) {
   const [rawPurchases, setRawPurchases] = useState(initialRawPurchases);
   const [rawMaterialsCatalog, setRawMaterialsCatalog] = useState(initialRawMaterialsCatalog);
   const [suppliers, setSuppliers] = useState(initialSuppliers);
+  const [customers, setCustomers] = useState(initialCustomers);
   const [machinePurchases, setMachinePurchases] = useState(initialMachinePurchases);
   const [miscPurchases, setMiscPurchases] = useState(initialMiscPurchases);
   const [payrollAdvances, setPayrollAdvances] = useState(initialPayrollAdvances);
@@ -2600,6 +2734,7 @@ function MainApp({ auth, onLogout }) {
   const [rmpForm, setRmpForm] = useState(initialRawPurchaseForm);
   const [rmcForm, setRmcForm] = useState(initialRawMaterialCatalogForm);
   const [supForm, setSupForm] = useState(initialSupplierForm);
+  const [cusForm, setCusForm] = useState(initialCustomerForm);
   const [mmpForm, setMmpForm] = useState(initialMachinePurchaseForm);
   const [mscForm, setMscForm] = useState(initialMiscPurchaseForm);
   const [payForm, setPayForm] = useState(initialPayrollAdvanceForm);
@@ -2613,6 +2748,7 @@ function MainApp({ auth, onLogout }) {
   const [rmpEditingId, setRmpEditingId] = useState('');
   const [rmcEditingId, setRmcEditingId] = useState('');
   const [supEditingId, setSupEditingId] = useState('');
+  const [cusEditingId, setCusEditingId] = useState('');
   const [mmpEditingId, setMmpEditingId] = useState('');
   const [mscEditingId, setMscEditingId] = useState('');
   const [payEditingId, setPayEditingId] = useState('');
@@ -2626,6 +2762,7 @@ function MainApp({ auth, onLogout }) {
   const [rmpSaving, setRmpSaving] = useState(false);
   const [rmcSaving, setRmcSaving] = useState(false);
   const [supSaving, setSupSaving] = useState(false);
+  const [cusSaving, setCusSaving] = useState(false);
   const [mmpSaving, setMmpSaving] = useState(false);
   const [mscSaving, setMscSaving] = useState(false);
   const [paySaving, setPaySaving] = useState(false);
@@ -2652,6 +2789,7 @@ function MainApp({ auth, onLogout }) {
   const [rmpFormOpen, setRmpFormOpen] = useState(false);
   const [rmcFormOpen, setRmcFormOpen] = useState(false);
   const [supFormOpen, setSupFormOpen] = useState(false);
+  const [cusFormOpen, setCusFormOpen] = useState(false);
   const [mmpFormOpen, setMmpFormOpen] = useState(false);
   const [mscFormOpen, setMscFormOpen] = useState(false);
   const [payFormOpen, setPayFormOpen] = useState(false);
@@ -2749,6 +2887,7 @@ function MainApp({ auth, onLogout }) {
         ['/api/raw-materials-purchases', setRawPurchases],
         ['/api/raw-materials-catalog', setRawMaterialsCatalog],
         ['/api/suppliers', setSuppliers],
+        ['/api/customers', setCustomers],
         ['/api/machine-maintenance-purchases', setMachinePurchases],
         ['/api/misc-purchases', setMiscPurchases],
         ['/api/payroll-advances', setPayrollAdvances],
@@ -2946,6 +3085,7 @@ function MainApp({ auth, onLogout }) {
 
   const customerOptions = Array.from(
     new Set([
+      ...(customers?.items || []).map((item) => item?.name),
       ...sales.items.map((item) => item.customerName),
       ...creditSales.items.map((item) => item.customerName),
       ...returns.items.map((item) => item.customerName)
@@ -2976,12 +3116,14 @@ function MainApp({ auth, onLogout }) {
   }
 
   function openCheckForm() {
+    setError('');
     setCheckEditingId('');
     setCheckForm(initialCheckForm);
     setCheckFormOpen(true);
   }
 
   function startCheckEdit(item) {
+    setError('');
     setCheckEditingId(item.id);
     setCheckForm({
       customerName: item.customerName,
@@ -2996,6 +3138,7 @@ function MainApp({ auth, onLogout }) {
   }
 
   function closeCheckForm() {
+    setError('');
     setCheckFormOpen(false);
     setCheckEditingId('');
     setCheckForm(initialCheckForm);
@@ -3037,12 +3180,14 @@ function MainApp({ auth, onLogout }) {
   }
 
   function openCashForm() {
+    setError('');
     setCashEditingId('');
     setCashForm(initialCashForm);
     setCashFormOpen(true);
   }
 
   function startCashEdit(item) {
+    setError('');
     setCashEditingId(item.id);
     setCashForm({
       customerName: item.customerName,
@@ -3054,6 +3199,7 @@ function MainApp({ auth, onLogout }) {
   }
 
   function closeCashForm() {
+    setError('');
     setCashFormOpen(false);
     setCashEditingId('');
     setCashForm(initialCashForm);
@@ -3091,30 +3237,50 @@ function MainApp({ auth, onLogout }) {
   // ── Sales ──────────────────────────────────────────────
   function handleSalesInputChange(event) {
     const { name, value } = event.target;
+    if (name === 'salesRep') {
+      setSalesRepProducts([]);
+      setSalesForm((current) => ({
+        ...current,
+        salesRep: value
+      }));
+      return;
+    }
+
+    setSalesForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function handleSalesAddItem() {
+    setSalesForm((current) => ({
+      ...current,
+      items: [...(current.items || []), { ...initialSalesItem }]
+    }));
+  }
+
+  function handleSalesRemoveItem(index) {
+    setSalesForm((current) => ({
+      ...current,
+      items: (current.items || []).filter((_, itemIndex) => itemIndex !== index)
+    }));
+  }
+
+  function handleSalesItemChange(index, field, value) {
     setSalesForm((current) => {
-      if (name === 'customerName' || name === 'salesRep') {
-        // Fetch products for the selected rep from repSubStores
-        const repProducts = Array.from(
-          new Set(
-            (repSubStores?.items || []).filter(
-              (item) => item?.repName?.trim().toLowerCase() === value?.trim().toLowerCase()
-            ).map((item) => item?.productName).filter(Boolean)
-          )
-        );
-        setSalesRepProducts(repProducts);
-        const keepCurrentProduct = repProducts.includes(current.productName);
-        return {
-          ...current,
-          [name]: value,
-          salesRep: value,
-          productName: keepCurrentProduct ? current.productName : ''
-        };
+      const items = [...(current.items || [])];
+      const updated = { ...(items[index] || { ...initialSalesItem }), [field]: value };
+
+      if (field === 'productName') {
+        const matchedProduct = (priceList?.items || []).find((item) => item?.productName === value);
+        updated.unitPrice = matchedProduct ? String(matchedProduct.sellingPrice) : '';
       }
-      return { ...current, [name]: value };
+
+      updated.lineTotal = Number(updated.qty || 0) * Number(updated.unitPrice || 0);
+      items[index] = updated;
+      return { ...current, items };
     });
   }
 
   function openSalesForm() {
+    setError('');
     setSalesEditingId('');
     setSalesForm(initialSalesForm);
     setSalesRepProducts([]);
@@ -3122,22 +3288,21 @@ function MainApp({ auth, onLogout }) {
   }
 
   function startSalesEdit(item) {
+    setError('');
     setSalesEditingId(item.id);
-    const repName = item.salesRep || item.customerName || '';
-    const repProducts = Array.from(
-      new Set(
-        (repSubStores?.items || []).filter(
-          (s) => s?.repName?.trim().toLowerCase() === repName.trim().toLowerCase()
-        ).map((s) => s?.productName).filter(Boolean)
-      )
-    );
-    setSalesRepProducts(repProducts);
+    const repName = item.salesRep || '';
+    setSalesRepProducts([]);
     setSalesForm({
       customerName: item.customerName,
-      productName: item.productName,
-      amount: String(item.amount),
+      items: Array.isArray(item.items) && item.items.length > 0
+        ? item.items.map((saleItem) => ({
+            ...saleItem,
+            qty: String(saleItem.qty),
+            unitPrice: String(saleItem.unitPrice)
+          }))
+        : [{ productName: item.productName, qty: '1', unitPrice: String(item.amount), lineTotal: item.amount }],
       status: item.status,
-      salesRep: item.salesRep,
+      salesRep: repName,
       saleDate: item.saleDate,
       notes: item.notes ?? ''
     });
@@ -3145,16 +3310,31 @@ function MainApp({ auth, onLogout }) {
   }
 
   function closeSalesForm() {
+    setError('');
     setSalesFormOpen(false);
     setSalesEditingId('');
     setSalesForm(initialSalesForm);
+    setSalesRepProducts([]);
   }
 
   async function handleSalesSubmit(event) {
     event.preventDefault();
     try {
       setSalesSaving(true); setError(''); setNotice('');
-      const payload = { ...salesForm, amount: Number(salesForm.amount), salesRep: salesForm.customerName };
+      const items = (salesForm.items || [])
+        .map((item) => ({
+          productName: item.productName,
+          qty: Number(item.qty || 0),
+          unitPrice: Number(item.unitPrice || 0),
+          lineTotal: Number(item.qty || 0) * Number(item.unitPrice || 0)
+        }))
+        .filter((item) => item.productName);
+      const payload = {
+        ...salesForm,
+        productName: items[0]?.productName || '',
+        amount: items.reduce((sum, item) => sum + item.lineTotal, 0),
+        items
+      };
       const url = salesEditingId ? `/api/sales/${salesEditingId}` : '/api/sales';
       const method = salesEditingId ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -3208,12 +3388,14 @@ function MainApp({ auth, onLogout }) {
   }
 
   function openCreditForm() {
+    setError('');
     setCreditEditingId('');
     setCreditForm(initialCreditForm);
     setCreditFormOpen(true);
   }
 
   function startCreditEdit(item) {
+    setError('');
     setCreditEditingId(item.id);
     setCreditForm({
       customerName: item.customerName,
@@ -3233,6 +3415,7 @@ function MainApp({ auth, onLogout }) {
   }
 
   function closeCreditForm() {
+    setError('');
     setCreditFormOpen(false);
     setCreditEditingId('');
     setCreditForm(initialCreditForm);
@@ -3287,12 +3470,14 @@ function MainApp({ auth, onLogout }) {
   }
 
   function openReturnsForm() {
+    setError('');
     setReturnsEditingId('');
     setReturnsForm(initialReturnsForm);
     setReturnsFormOpen(true);
   }
 
   function startReturnsEdit(item) {
+    setError('');
     setReturnsEditingId(item.id);
     setReturnsForm({
       customerName: item.customerName,
@@ -3309,6 +3494,7 @@ function MainApp({ auth, onLogout }) {
   }
 
   function closeReturnsForm() {
+    setError('');
     setReturnsFormOpen(false);
     setReturnsEditingId('');
     setReturnsForm(initialReturnsForm);
@@ -3350,12 +3536,14 @@ function MainApp({ auth, onLogout }) {
   }
 
   function openPriceListForm() {
+    setError('');
     setPriceListEditingId('');
     setPriceListForm(initialPriceListForm);
     setPriceListFormOpen(true);
   }
 
   function startPriceListEdit(item) {
+    setError('');
     setPriceListEditingId(item.id);
     setPriceListForm({
       productName: item.productName,
@@ -3368,6 +3556,7 @@ function MainApp({ auth, onLogout }) {
   }
 
   function closePriceListForm() {
+    setError('');
     setPriceListFormOpen(false);
     setPriceListEditingId('');
     setPriceListForm(initialPriceListForm);
@@ -3531,9 +3720,9 @@ function MainApp({ auth, onLogout }) {
   // ── Generic CRUD helper ────────────────────────────────
   function makeModuleCrud(apiPath, setData, form, setForm, initialForm, editingId, setEditingId, saving, setSaving, formOpen, setFormOpen, mapToPayload, mapToForm, deleteType, entityLabel, afterSave) {
     function handleInput(e) { const { name, value } = e.target; setForm(c => ({ ...c, [name]: value })); }
-    function openForm() { setEditingId(''); setForm(initialForm); setFormOpen(true); }
-    function startEdit(item) { setEditingId(item.id); setForm(mapToForm(item)); setFormOpen(true); }
-    function closeForm() { setFormOpen(false); setEditingId(''); setForm(initialForm); }
+    function openForm() { setError(''); setEditingId(''); setForm(initialForm); setFormOpen(true); }
+    function startEdit(item) { setError(''); setEditingId(item.id); setForm(mapToForm(item)); setFormOpen(true); }
+    function closeForm() { setError(''); setFormOpen(false); setEditingId(''); setForm(initialForm); }
     async function handleSubmit(e) {
       e.preventDefault();
       try {
@@ -3612,8 +3801,13 @@ function MainApp({ auth, onLogout }) {
     'rmc', 'الخامة');
   const supCrud = makeModuleCrud('/suppliers', setSuppliers, supForm, setSupForm, initialSupplierForm, supEditingId, setSupEditingId, supSaving, setSupSaving, supFormOpen, setSupFormOpen,
     f => ({ ...f }),
-    i => ({ name: i.name, notes: i.notes || '' }),
+    i => ({ code: i.code || '', name: i.name, notes: i.notes || '' }),
     'sup', 'المورد');
+
+  const cusCrud = makeModuleCrud('/customers', setCustomers, cusForm, setCusForm, initialCustomerForm, cusEditingId, setCusEditingId, cusSaving, setCusSaving, cusFormOpen, setCusFormOpen,
+    f => ({ ...f }),
+    i => ({ code: i.code || '', name: i.name, phone: i.phone || '', address: i.address || '', notes: i.notes || '' }),
+    'cus', 'العميل');
 
   const mmpCrud = makeModuleCrud('/machine-maintenance-purchases', setMachinePurchases, mmpForm, setMmpForm, initialMachinePurchaseForm, mmpEditingId, setMmpEditingId, mmpSaving, setMmpSaving, mmpFormOpen, setMmpFormOpen,
     f => ({ ...f, amount: Number(f.amount||0) }),
@@ -3677,6 +3871,7 @@ function MainApp({ auth, onLogout }) {
   }
 
   function openFmcAssignForm(managerRecord) {
+    setError('');
     setActiveManagerCustodyId(managerRecord.id);
     setFmcEditingId('');
     setFmcAssignForm({
@@ -3919,16 +4114,12 @@ function MainApp({ auth, onLogout }) {
     ...availableEmployeeUsers.filter((user) => user.role === 'sales').map((user) => user.displayName).filter(Boolean),
     ...(repSubStores?.items || []).map((item) => item?.repName).filter(Boolean)
   ]));
-  const allSalesProductOptions = Array.from(new Set((repSubStores?.items || []).map((item) => item?.productName).filter(Boolean)));
+  const allSalesProductOptions = Array.from(
+    new Set((finalProductStore?.items || []).map((item) => item?.productName).filter(Boolean))
+  );
   const salesProductOptions = salesRepProducts.length > 0
     ? salesRepProducts
-    : salesForm.salesRep
-      ? Array.from(new Set(
-          (repSubStores?.items || []).filter(
-            (item) => item?.repName?.trim().toLowerCase() === salesForm.salesRep?.trim().toLowerCase()
-          ).map((item) => item?.productName).filter(Boolean)
-        ))
-      : allSalesProductOptions;
+    : allSalesProductOptions;
   const transferRepOptions = Array.from(new Set([
     ...repUsers.map((user) => user?.displayName).filter(Boolean),
     ...(repSubStores?.items || []).map((item) => item?.repName).filter(Boolean)
@@ -4076,9 +4267,13 @@ function MainApp({ auth, onLogout }) {
             editingId={salesEditingId}
             saving={salesSaving}
             isFormOpen={salesFormOpen}
+            formError={salesFormOpen ? error : ''}
             onOpenForm={openSalesForm}
             onCloseForm={closeSalesForm}
             onChange={handleSalesInputChange}
+            onItemAdd={handleSalesAddItem}
+            onItemRemove={handleSalesRemoveItem}
+            onItemChange={handleSalesItemChange}
             onSubmit={handleSalesSubmit}
             onEdit={startSalesEdit}
             onDelete={requestSalesDelete}
@@ -4092,6 +4287,7 @@ function MainApp({ auth, onLogout }) {
             editingId={creditEditingId}
             saving={creditSaving}
             isFormOpen={creditFormOpen}
+            formError={creditFormOpen ? error : ''}
             onOpenForm={openCreditForm}
             onCloseForm={closeCreditForm}
             onChange={handleCreditInputChange}
@@ -4114,6 +4310,7 @@ function MainApp({ auth, onLogout }) {
             editingId={returnsEditingId}
             saving={returnsSaving}
             isFormOpen={returnsFormOpen}
+            formError={returnsFormOpen ? error : ''}
             onOpenForm={openReturnsForm}
             onCloseForm={closeReturnsForm}
             onChange={handleReturnsInputChange}
@@ -4132,6 +4329,7 @@ function MainApp({ auth, onLogout }) {
             editingId={priceListEditingId}
             saving={priceListSaving}
             isFormOpen={priceListFormOpen}
+            formError={priceListFormOpen ? error : ''}
             onOpenForm={openPriceListForm}
             onCloseForm={closePriceListForm}
             onChange={handlePriceListInputChange}
@@ -4166,6 +4364,7 @@ function MainApp({ auth, onLogout }) {
             editingId={checkEditingId}
             saving={checkSaving}
             isFormOpen={checkFormOpen}
+            formError={checkFormOpen ? error : ''}
             onOpenForm={openCheckForm}
             onCloseForm={closeCheckForm}
             onChange={handleCheckInputChange}
@@ -4177,6 +4376,7 @@ function MainApp({ auth, onLogout }) {
             cashEditingId={cashEditingId}
             cashSaving={cashSaving}
             isCashFormOpen={cashFormOpen}
+            cashFormError={cashFormOpen ? error : ''}
             onOpenCashForm={openCashForm}
             onCloseCashForm={closeCashForm}
             onCashChange={handleCashInputChange}
@@ -4283,6 +4483,7 @@ function MainApp({ auth, onLogout }) {
             editingId={pcEditingId}
             saving={pcSaving}
             isFormOpen={pcFormOpen}
+            formError={pcFormOpen ? error : ''}
             onOpenForm={pcCrud.openForm}
             onCloseForm={pcCrud.closeForm}
             onSubmit={pcCrud.handleSubmit}
@@ -4351,6 +4552,7 @@ function MainApp({ auth, onLogout }) {
             editingId={fpEditingId}
             saving={fpSaving}
             isFormOpen={fpFormOpen}
+            formError={fpFormOpen ? error : ''}
             onOpenForm={fpCrud.openForm}
             onCloseForm={fpCrud.closeForm}
             onSubmit={fpCrud.handleSubmit}
@@ -4415,6 +4617,7 @@ function MainApp({ auth, onLogout }) {
             editingId={rmEditingId}
             saving={rmSaving}
             isFormOpen={rmFormOpen}
+            formError={rmFormOpen ? error : ''}
             onOpenForm={rmCrud.openForm}
             onCloseForm={rmCrud.closeForm}
             onSubmit={rmCrud.handleSubmit}
@@ -4486,6 +4689,7 @@ function MainApp({ auth, onLogout }) {
             editingId={rssEditingId}
             saving={rssSaving}
             isFormOpen={rssFormOpen}
+            formError={rssFormOpen ? error : ''}
             onOpenForm={() => {
               fetch('/api/users/by-role/sales', { headers: { Authorization: `Bearer ${auth.token}` } })
                 .then(r => r.ok ? r.json() : []).then(data => setRepUsers(Array.isArray(data) ? data : [])).catch(() => {});
@@ -4525,7 +4729,7 @@ function MainApp({ auth, onLogout }) {
           />
 
           {/* Transfer Modal */}
-          <Modal isOpen={transferFormOpen} onClose={() => setTransferFormOpen(false)} title="نقل من مخزن المنتج النهائي إلى مندوب">
+          <Modal isOpen={transferFormOpen} onClose={() => setTransferFormOpen(false)} title="نقل من مخزن المنتج النهائي إلى مندوب" errorMessage={transferFormOpen ? error : ''}>
             <form className="form-grid" onSubmit={handleTransferSubmit}>
               <label><span>اسم المندوب</span>
                 <select value={transferForm.repName} onChange={e => setTransferForm(f => ({...f, repName: e.target.value}))} required>
@@ -4560,7 +4764,7 @@ function MainApp({ auth, onLogout }) {
           </Modal>
 
           {/* Sale Deduct Modal */}
-          <Modal isOpen={saleDeductOpen} onClose={() => setSaleDeductOpen(false)} title="تسجيل بيع وخصم من مخزن المندوب">
+          <Modal isOpen={saleDeductOpen} onClose={() => setSaleDeductOpen(false)} title="تسجيل بيع وخصم من مخزن المندوب" errorMessage={saleDeductOpen ? error : ''}>
             <form className="form-grid" onSubmit={handleSaleDeductSubmit}>
               <label><span>اسم المندوب</span><input value={saleDeductForm.repName} onChange={e => setSaleDeductForm(f => ({...f, repName: e.target.value}))} required /></label>
               <label><span>المنتج</span><input value={saleDeductForm.productName} onChange={e => setSaleDeductForm(f => ({...f, productName: e.target.value}))} required /></label>
@@ -4586,6 +4790,7 @@ function MainApp({ auth, onLogout }) {
             editingId={fmcEditingId}
             saving={fmcSaving}
             isFormOpen={fmcFormOpen}
+            formError={fmcFormOpen ? error : ''}
             extraActions={
               <form onSubmit={handleSetFmcBudget} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <input
@@ -4666,7 +4871,7 @@ function MainApp({ auth, onLogout }) {
               </>
             </>}
           />
-          <Modal isOpen={fmcAssignOpen} onClose={() => { setFmcAssignOpen(false); setActiveManagerCustodyId(''); }} title="تعيين عهدة موظف">
+          <Modal isOpen={fmcAssignOpen} onClose={() => { setFmcAssignOpen(false); setActiveManagerCustodyId(''); }} title="تعيين عهدة موظف" errorMessage={fmcAssignOpen ? error : ''}>
             <form className="form-grid" onSubmit={handleFmcAssignSubmit}>
               <label><span>اسم الموظف</span>
                 <select name="employeeName" value={fmcAssignForm.employeeName} onChange={e => setFmcAssignForm(c => ({ ...c, employeeName: e.target.value }))} required>
@@ -4699,6 +4904,7 @@ function MainApp({ auth, onLogout }) {
             editingId={rmcEditingId}
             saving={rmcSaving}
             isFormOpen={rmcFormOpen}
+            formError={rmcFormOpen ? error : ''}
             onOpenForm={rmcCrud.openForm}
             onCloseForm={rmcCrud.closeForm}
             onSubmit={rmcCrud.handleSubmit}
@@ -4739,6 +4945,7 @@ function MainApp({ auth, onLogout }) {
             editingId={supEditingId}
             saving={supSaving}
             isFormOpen={supFormOpen}
+            formError={supFormOpen ? error : ''}
             onOpenForm={supCrud.openForm}
             onCloseForm={supCrud.closeForm}
             onSubmit={supCrud.handleSubmit}
@@ -4748,6 +4955,7 @@ function MainApp({ auth, onLogout }) {
                 <div className="table-main">
                   <div className="record-top">
                     <strong>{item.name}</strong>
+                    {item.code ? <span className="meta">كود: {item.code}</span> : null}
                   </div>
                   {item.notes ? <p>{item.notes}</p> : <p>—</p>}
                 </div>
@@ -4760,8 +4968,54 @@ function MainApp({ auth, onLogout }) {
               </article>
             )}
             formFields={<>
+              <label><span>كود المورد</span><input name="code" value={supForm.code} onChange={supCrud.handleInput} /></label>
               <label><span>اسم المورد</span><input name="name" value={supForm.name} onChange={supCrud.handleInput} required /></label>
               <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={supForm.notes} onChange={supCrud.handleInput} /></label>
+            </>}
+          />
+        ) : null}
+
+        {!loading && activeView === 'customers' ? (
+          <GenericCrudView
+            data={customers}
+            eyebrow="تسجيل العملاء"
+            headline="إدارة قائمة العملاء المعتمدين"
+            addLabel="إضافة عميل"
+            emptyLabel="لا يوجد عملاء مسجلون بعد."
+            formTitle="عميل"
+            editingId={cusEditingId}
+            saving={cusSaving}
+            isFormOpen={cusFormOpen}
+            formError={cusFormOpen ? error : ''}
+            onOpenForm={cusCrud.openForm}
+            onCloseForm={cusCrud.closeForm}
+            onSubmit={cusCrud.handleSubmit}
+            onBack={viewHistory.length > 0 ? goBack : undefined}
+            renderRow={(item) => (
+              <article key={item.id} className="table-row">
+                <div className="table-main">
+                  <div className="record-top">
+                    <strong>{item.name}</strong>
+                    {item.code ? <span className="meta">كود: {item.code}</span> : null}
+                    {item.phone ? <span className="meta">{item.phone}</span> : null}
+                  </div>
+                  {item.address ? <p>{item.address}</p> : null}
+                  {item.notes ? <p>{item.notes}</p> : <p>—</p>}
+                </div>
+                <div className="table-side">
+                  <div className="row-actions">
+                    <button type="button" className="ghost-button small" onClick={() => cusCrud.startEdit(item)}>تعديل</button>
+                    <button type="button" className="danger-button small" onClick={() => cusCrud.requestDelete(item.id)}>حذف</button>
+                  </div>
+                </div>
+              </article>
+            )}
+            formFields={<>
+              <label><span>كود العميل</span><input name="code" value={cusForm.code} onChange={cusCrud.handleInput} /></label>
+              <label><span>اسم العميل</span><input name="name" value={cusForm.name} onChange={cusCrud.handleInput} required /></label>
+              <label><span>رقم الهاتف</span><input name="phone" value={cusForm.phone} onChange={cusCrud.handleInput} /></label>
+              <label className="full-width"><span>العنوان</span><input name="address" value={cusForm.address} onChange={cusCrud.handleInput} /></label>
+              <label className="full-width"><span>ملاحظات</span><textarea name="notes" rows="2" value={cusForm.notes} onChange={cusCrud.handleInput} /></label>
             </>}
           />
         ) : null}
@@ -5090,6 +5344,7 @@ function MainApp({ auth, onLogout }) {
             editingId={cpaEditingId}
             saving={cpaSaving}
             isFormOpen={cpaFormOpen}
+            formError={cpaFormOpen ? error : ''}
             onOpenForm={cpaCrud.openForm}
             onCloseForm={cpaCrud.closeForm}
             onSubmit={cpaCrud.handleSubmit}
@@ -5135,6 +5390,7 @@ function MainApp({ auth, onLogout }) {
             editingId={fsEditingId}
             saving={fsSaving}
             isFormOpen={fsFormOpen}
+            formError={fsFormOpen ? error : ''}
             onOpenForm={fsCrud.openForm}
             onCloseForm={fsCrud.closeForm}
             onSubmit={fsCrud.handleSubmit}
@@ -5183,7 +5439,7 @@ function MainApp({ auth, onLogout }) {
         ) : null}
       </main>
 
-      <Modal isOpen={transactionsModalOpen} onClose={closeTransactionsModal} title="إدارة حركات العهدة">
+      <Modal isOpen={transactionsModalOpen} onClose={closeTransactionsModal} title="إدارة حركات العهدة" errorMessage={transactionsModalOpen ? error : ''}>
         <div style={{ marginBottom: '24px' }}>
           <form className="form-grid" onSubmit={handleTransactionSubmit} style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
             <label>

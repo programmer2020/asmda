@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS direct_sales (
   id VARCHAR(50) PRIMARY KEY,
   customer_name VARCHAR(255) NOT NULL,
   product_name VARCHAR(255) NOT NULL,
+  items JSONB NOT NULL DEFAULT '[]',
   amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
   status VARCHAR(50) DEFAULT 'جديدة',
   sales_rep VARCHAR(255),
@@ -9,6 +10,8 @@ CREATE TABLE IF NOT EXISTS direct_sales (
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE direct_sales ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]';
 
 CREATE TABLE IF NOT EXISTS installment_sales (
   id VARCHAR(50) PRIMARY KEY,
@@ -239,6 +242,7 @@ CREATE TABLE IF NOT EXISTS raw_materials_catalog (
 -- ── Suppliers Catalog ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS suppliers_catalog (
   id VARCHAR(100) PRIMARY KEY,
+  code VARCHAR(100) NOT NULL DEFAULT '',
   name VARCHAR(255) NOT NULL UNIQUE,
   notes TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -254,3 +258,42 @@ CREATE TABLE IF NOT EXISTS product_cards (
   notes TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ── Customers Catalog ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS customers_catalog (
+  id VARCHAR(100) PRIMARY KEY,
+  code VARCHAR(100) NOT NULL DEFAULT '',
+  name VARCHAR(255) NOT NULL UNIQUE,
+  phone VARCHAR(50) NOT NULL DEFAULT '',
+  address TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE customers_catalog ADD COLUMN IF NOT EXISTS code VARCHAR(100) NOT NULL DEFAULT '';
+
+-- ── Roles & Users ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS roles (
+  id VARCHAR(100) PRIMARY KEY,
+  label VARCHAR(255) NOT NULL UNIQUE,
+  pages JSONB NOT NULL DEFAULT '[]',
+  all_pages BOOLEAN NOT NULL DEFAULT FALSE,
+  is_system BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS pages JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS all_pages BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS is_system BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS users (
+  id VARCHAR(100) PRIMARY KEY,
+  username VARCHAR(255) NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  display_name VARCHAR(255) NOT NULL,
+  code VARCHAR(100) NOT NULL DEFAULT '',
+  role_id VARCHAR(100) NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS code VARCHAR(100) NOT NULL DEFAULT '';

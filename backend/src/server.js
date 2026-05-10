@@ -93,16 +93,39 @@ import {
   getCashReceiptsData,
   createCashReceiptRecord,
   updateCashReceiptRecord,
-  deleteCashReceiptRecord
+  deleteCashReceiptRecord,
+  getCustomersData,
+  createCustomerRecord,
+  updateCustomerRecord,
+  deleteCustomerRecord
 } from './data/erbStore.js';
 import { getDatabaseStatus, safeQuery, getCurrentMode, switchMode } from './db.js';
 import { createSwaggerSpec } from './swagger.js';
 import bcrypt from 'bcryptjs';
-import { getAllUsers, getUserByUsername, getUserById, createUser, updateUser, deleteUser, ROLES, ROLE_LABELS, ROLE_PAGES, getAllRoles, createRole, updateRole, deleteRole, ALL_PAGES, getRolePagesById } from './data/users.js';
+import { initializeUsersStore, getAllUsers, getUserByUsername, getUserById, createUser, updateUser, deleteUser, getAllRoles, getRoleById, createRole, updateRole, deleteRole, ALL_PAGES } from './data/users.js';
 
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'asmda-secret-dev-key-change-in-prod';
+await initializeUsersStore();
+
+async function buildAuthUserResponse(user, includeCode = false) {
+  const role = await getRoleById(user.role);
+  const authUser = {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    role: user.role,
+    roleLabel: role?.label ?? user.role,
+    pages: role?.pages ?? []
+  };
+
+  if (includeCode) {
+    authUser.code = user.code || '';
+  }
+
+  return authUser;
+}
 
 function authMiddleware(req, res, next) {
   const auth = req.headers['authorization'] ?? '';
@@ -167,11 +190,32 @@ app.get('/api-docs.json', (_request, response) => {
 });
 
 function validateSalesPayload(body) {
-  if (!body.customerName || !body.productName || !body.salesRep || !body.saleDate) {
-    return 'يرجى إدخال اسم العميل والمنتج ومسؤول المبيعات وتاريخ البيع.';
+  const items = Array.isArray(body.items) && body.items.length > 0
+    ? body.items
+    : body.productName
+      ? [{ productName: body.productName, qty: 1, unitPrice: body.amount, lineTotal: body.amount }]
+      : [];
+
+  if (!body.customerName || !body.salesRep || !body.saleDate || items.length === 0) {
+    return 'يرجى إدخال اسم العميل ومسؤول المبيعات وتاريخ البيع وصنف واحد على الأقل.';
   }
 
-  if (Number(body.amount) <= 0) {
+  if (items.some((item) => !item?.productName)) {
+    return 'يرجى اختيار جميع الأصناف داخل الفاتورة.';
+  }
+
+  if (items.some((item) => Number(item?.qty || 0) <= 0)) {
+    return 'كمية كل صنف يجب أن تكون أكبر من صفر.';
+  }
+
+  const total = items.reduce((sum, item) => {
+    const qty = Number(item?.qty || 0);
+    const hasUnitPrice = item?.unitPrice !== undefined && item?.unitPrice !== null && item?.unitPrice !== '';
+    const unitPrice = hasUnitPrice ? Number(item.unitPrice) : qty > 0 ? Number(item?.lineTotal || 0) / qty : 0;
+    return sum + Math.max(0, qty) * Math.max(0, unitPrice);
+  }, 0);
+
+  if (total <= 0 && Number(body.amount) <= 0) {
     return 'قيمة المبيعات يجب أن تكون أكبر من صفر.';
   }
 
@@ -853,6 +897,18 @@ app.put('/api/raw-materials-catalog/:id', async (req, res) => {
 });
 app.delete('/api/raw-materials-catalog/:id', async (req, res) => { try { const d = await deleteRawMaterialsCatalogRecord(req.params.id); if (!d) { res.status(404).json({ message: 'الخامة غير موجودة.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
 
+// ── Customers Catalog ────────────────────────────────────────────────────────
+app.get('/api/customers', async (_req, res) => { try { res.json(await getCustomersData()); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/customers', async (req, res) => {
+  if (!req.body.name) { res.status(400).json({ message: 'يرجى إدخال اسم العميل.' }); return; }
+  try { res.status(201).json(await createCustomerRecord(req.body)); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.put('/api/customers/:id', async (req, res) => {
+  if (!req.body.name) { res.status(400).json({ message: 'يرجى إدخال اسم العميل.' }); return; }
+  try { const u = await updateCustomerRecord(req.params.id, req.body); if (!u) { res.status(404).json({ message: 'العميل غير موجود.' }); return; } res.json(u); } catch (e) { res.status(500).json({ message: e.message }); }
+});
+app.delete('/api/customers/:id', async (req, res) => { try { const d = await deleteCustomerRecord(req.params.id); if (!d) { res.status(404).json({ message: 'العميل غير موجود.' }); return; } res.status(204).send(); } catch (e) { res.status(500).json({ message: e.message }); } });
+
 // ── Suppliers Catalog (Names) ─────────────────────────────────────────────────
 app.get('/api/suppliers', async (_req, res) => { try { res.json(await getSuppliersData()); } catch (e) { res.status(500).json({ message: e.message }); } });
 app.post('/api/suppliers', async (req, res) => {
@@ -975,65 +1031,86 @@ app.post('/api/rep-sub-stores/sale-deduct', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body ?? {};
   if (!username || !password) { res.status(400).json({ message: 'يرجى إدخال اسم المستخدم وكلمة المرور.' }); return; }
-  const user = getUserByUsername(username);
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    res.status(401).json({ message: 'اسم المستخدم أو كلمة المرور غير صحيحة.' }); return;
+  try {
+    const user = await getUserByUsername(username);
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      res.status(401).json({ message: 'اسم المستخدم أو كلمة المرور غير صحيحة.' }); return;
+    }
+    const token = jwt.sign({ id: user.id, username: user.username, displayName: user.displayName, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({ token, user: await buildAuthUserResponse(user) });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
   }
-  const token = jwt.sign({ id: user.id, username: user.username, displayName: user.displayName, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
-  res.json({ token, user: { id: user.id, username: user.username, displayName: user.displayName, role: user.role, roleLabel: ROLE_LABELS[user.role], pages: ROLE_PAGES[user.role] } });
 });
 
-app.get('/api/auth/me', authMiddleware, (req, res) => {
-  const user = getUserById(req.user.id);
-  if (!user) { res.status(404).json({ message: 'المستخدم غير موجود.' }); return; }
-  const { passwordHash: _, ...safe } = user;
-  res.json({ ...safe, roleLabel: ROLE_LABELS[safe.role], pages: ROLE_PAGES[safe.role] });
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await getUserById(req.user.id);
+    if (!user) { res.status(404).json({ message: 'المستخدم غير موجود.' }); return; }
+    res.json(await buildAuthUserResponse(user, true));
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
-app.get('/api/users/options', authMiddleware, (_req, res) => {
-  res.json(getAllUsers().map(({ id, displayName, code, role }) => ({ id, displayName, code, role })));
+app.get('/api/users/options', authMiddleware, async (_req, res) => {
+  try {
+    const users = await getAllUsers();
+    res.json(users.map(({ id, displayName, code, role }) => ({ id, displayName, code, role })));
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
 // ── User management (admin only) ──
-app.get('/api/users', authMiddleware, adminOnly, (_req, res) => {
-  res.json({ users: getAllUsers(), roles: getAllRoles().map(r => ({ value: r.id, label: r.label })) });
+app.get('/api/users', authMiddleware, adminOnly, async (_req, res) => {
+  try {
+    const users = await getAllUsers();
+    const roles = await getAllRoles();
+    res.json({ users, roles: roles.map((role) => ({ value: role.id, label: role.label })) });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
 // Get users by role (accessible to all authenticated users)
-app.get('/api/users/by-role/:role', authMiddleware, (req, res) => {
-  const users = getAllUsers().filter(u => u.role === req.params.role);
-  res.json(users);
+app.get('/api/users/by-role/:role', authMiddleware, async (req, res) => {
+  try {
+    const users = await getAllUsers();
+    res.json(users.filter((user) => user.role === req.params.role));
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
 // ── Reps Management (manager/admin) ──
-app.get('/api/reps', authMiddleware, managerOrAdmin, (_req, res) => {
-  const reps = getAllUsers()
-    .filter((u) => u.role === 'sales')
-    .map(({ id, username, displayName, code, role }) => ({ id, username, displayName, code: code || '', role }));
-  res.json(reps);
+app.get('/api/reps', authMiddleware, managerOrAdmin, async (_req, res) => {
+  try {
+    const users = await getAllUsers();
+    const reps = users
+      .filter((user) => user.role === 'sales')
+      .map(({ id, username, displayName, code, role }) => ({ id, username, displayName, code: code || '', role }));
+    res.json(reps);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
-app.post('/api/reps', authMiddleware, managerOrAdmin, (req, res) => {
+app.post('/api/reps', authMiddleware, managerOrAdmin, async (req, res) => {
   const { username, password, displayName, code } = req.body ?? {};
   if (!username || !password || !displayName) {
     res.status(400).json({ message: 'يرجى إدخال اسم المستخدم وكلمة المرور والاسم الظاهر.' });
     return;
   }
   try {
-    const created = createUser({ username, password, displayName, code: code || '', role: 'sales' });
+    const created = await createUser({ username, password, displayName, code: code || '', role: 'sales' });
     res.status(201).json(created);
   } catch (e) {
     res.status(400).json({ message: e.message });
   }
 });
 
-app.put('/api/reps/:id', authMiddleware, managerOrAdmin, (req, res) => {
-  const target = getUserById(req.params.id);
-  if (!target || target.role !== 'sales') {
-    res.status(404).json({ message: 'المندوب غير موجود.' });
-    return;
-  }
-
+app.put('/api/reps/:id', authMiddleware, managerOrAdmin, async (req, res) => {
   const { displayName, code, password } = req.body ?? {};
   if (!displayName) {
     res.status(400).json({ message: 'يرجى إدخال الاسم الظاهر.' });
@@ -1041,7 +1118,13 @@ app.put('/api/reps/:id', authMiddleware, managerOrAdmin, (req, res) => {
   }
 
   try {
-    const updated = updateUser(req.params.id, {
+    const target = await getUserById(req.params.id);
+    if (!target || target.role !== 'sales') {
+      res.status(404).json({ message: 'المندوب غير موجود.' });
+      return;
+    }
+
+    const updated = await updateUser(req.params.id, {
       displayName,
       code: code || '',
       role: 'sales',
@@ -1053,61 +1136,65 @@ app.put('/api/reps/:id', authMiddleware, managerOrAdmin, (req, res) => {
   }
 });
 
-app.delete('/api/reps/:id', authMiddleware, managerOrAdmin, (req, res) => {
-  const target = getUserById(req.params.id);
-  if (!target || target.role !== 'sales') {
-    res.status(404).json({ message: 'المندوب غير موجود.' });
-    return;
-  }
-
+app.delete('/api/reps/:id', authMiddleware, managerOrAdmin, async (req, res) => {
   try {
-    deleteUser(req.params.id);
+    const target = await getUserById(req.params.id);
+    if (!target || target.role !== 'sales') {
+      res.status(404).json({ message: 'المندوب غير موجود.' });
+      return;
+    }
+
+    await deleteUser(req.params.id);
     res.status(204).send();
   } catch (e) {
     res.status(400).json({ message: e.message });
   }
 });
 
-app.post('/api/users', authMiddleware, adminOnly, (req, res) => {
-  const { username, password, displayName, role } = req.body ?? {};
+app.post('/api/users', authMiddleware, adminOnly, async (req, res) => {
+  const { username, password, displayName, code, role } = req.body ?? {};
   if (!username || !password || !displayName || !role) { res.status(400).json({ message: 'يرجى إدخال جميع الحقول المطلوبة.' }); return; }
-  try { res.status(201).json(createUser({ username, password, displayName, role })); }
+  try { res.status(201).json(await createUser({ username, password, displayName, code: code || '', role })); }
   catch (e) { res.status(400).json({ message: e.message }); }
 });
 
-app.put('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
-  try { res.json(updateUser(req.params.id, req.body)); }
+app.put('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
+  try { res.json(await updateUser(req.params.id, req.body)); }
   catch (e) { res.status(400).json({ message: e.message }); }
 });
 
-app.delete('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
-  try { deleteUser(req.params.id); res.status(204).send(); }
+app.delete('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
+  try { await deleteUser(req.params.id); res.status(204).send(); }
   catch (e) { res.status(400).json({ message: e.message }); }
 });
 
 // ── Roles Management ──────────────────────────────────────────────────────────
-app.get('/api/roles', authMiddleware, adminOnly, (req, res) => {
-  res.json({ roles: getAllRoles(), pages: ALL_PAGES });
+app.get('/api/roles', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    res.json({ roles: await getAllRoles(), pages: ALL_PAGES });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
-app.post('/api/roles', authMiddleware, adminOnly, (req, res) => {
+app.post('/api/roles', authMiddleware, adminOnly, async (req, res) => {
   try {
     const { label, pages } = req.body;
-    const role = createRole({ label, pages });
+    const role = await createRole({ label, pages });
     res.status(201).json(role);
   } catch (e) { res.status(400).json({ message: e.message }); }
 });
 
-app.put('/api/roles/:id', authMiddleware, adminOnly, (req, res) => {
+app.put('/api/roles/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
     const { label, pages } = req.body;
-    const role = updateRole(req.params.id, { label, pages });
+    const role = await updateRole(req.params.id, { label, pages });
     res.json(role);
   } catch (e) { res.status(400).json({ message: e.message }); }
 });
 
-app.delete('/api/roles/:id', authMiddleware, adminOnly, (req, res) => {
-  try { deleteRole(req.params.id); res.status(204).send(); }
+app.delete('/api/roles/:id', authMiddleware, adminOnly, async (req, res) => {
+  try { await deleteRole(req.params.id); res.status(204).send(); }
   catch (e) { res.status(400).json({ message: e.message }); }
 });
 
