@@ -694,7 +694,10 @@ const views = [
   'credit-sales',
   'price-list',
   'custodies',
-  'statement'
+  'statement',
+  'gov-report',
+  'rep-report',
+  'expenses-report'
 ];
 
 const navigation = [
@@ -812,6 +815,21 @@ const navigation = [
     id: 'statement',
     label: 'كشف حساب',
     helper: 'استعراض حركة العميل ورصيده'
+  },
+  {
+    id: 'gov-report',
+    label: 'تقرير مديونية المحافظات',
+    helper: 'مديونية العملاء مجمّعة حسب المحافظة'
+  },
+  {
+    id: 'rep-report',
+    label: 'تقرير حركة المندوب',
+    helper: 'مبيعات وتحصيلات ومرتجعات المندوب خلال فترة'
+  },
+  {
+    id: 'expenses-report',
+    label: 'تقرير المصروفات',
+    helper: 'ملخص المصروفات مجمّعة حسب النوع'
   }
 ];
 
@@ -840,6 +858,11 @@ const navigationGroups = [
     id: 'sales-and-collection',
     label: 'المبيعات والتحصيل',
     items: ['sales', 'checks', 'returns', 'customer-payment-alerts', 'free-samples', 'credit-sales', 'price-list', 'statement']
+  },
+  {
+    id: 'reports',
+    label: 'التقارير',
+    items: ['gov-report', 'rep-report', 'expenses-report']
   },
   {
     id: 'administration',
@@ -1033,11 +1056,12 @@ function getInitialView() {
   return views.includes(hash) ? hash : 'dashboard';
 }
 
-function formatMoney(value) {
+function formatMoney(value, decimals = 0) {
   return new Intl.NumberFormat('ar-EG', {
     style: 'currency',
     currency: 'EGP',
-    maximumFractionDigits: 0
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
   }).format(Number(value ?? 0));
 }
 
@@ -1392,6 +1416,597 @@ function GenericCrudView({ data, eyebrow, headline, addLabel, emptyLabel, render
         </form>
       </Modal>
     </>
+  );
+}
+
+function ExpensesReportView({ custodies, rawPurchases, machinePurchases, miscPurchases, payrollAdvances }) {
+  const today = new Date().toISOString().split('T')[0];
+  const firstOfMonth = today.slice(0, 8) + '01';
+  const [dateFrom, setDateFrom] = useState(firstOfMonth);
+  const [dateTo, setDateTo] = useState(today);
+  const [activeTab, setActiveTab] = useState('summary');
+
+  const inRange = (dateStr) => {
+    if (!dateStr) return true; // بدون تاريخ تُحسب دائماً
+    return dateStr >= dateFrom && dateStr <= dateTo;
+  };
+
+  // تجميع البيانات حسب النوع
+  const salaries = (payrollAdvances?.items || []).filter(i => i.type === 'راتب' && inRange(i.month));
+  const advances = (payrollAdvances?.items || []).filter(i => i.type === 'سلفة' && inRange(i.month));
+  const rawItems = (rawPurchases?.items || []).filter(i => inRange(i.purchaseDate));
+  const machineItems = (machinePurchases?.items || []).filter(i => inRange(i.purchaseDate));
+  const miscItems = (miscPurchases?.items || []).filter(i => inRange(i.purchaseDate));
+
+  // المصاريف النثرية مجمّعة بالتصنيف
+  const miscByCategory = miscItems.reduce((acc, i) => {
+    const cat = i.category || 'أخرى';
+    if (!acc[cat]) acc[cat] = { label: cat, total: 0, count: 0 };
+    acc[cat].total += Number(i.amount) || 0;
+    acc[cat].count += 1;
+    return acc;
+  }, {});
+
+  const totals = {
+    salaries: salaries.reduce((a, i) => a + (Number(i.amount) || 0), 0),
+    advances: advances.reduce((a, i) => a + (Number(i.amount) || 0), 0),
+    raw: rawItems.reduce((a, i) => a + (Number(i.totalAmount) || 0), 0),
+    machine: machineItems.reduce((a, i) => a + (Number(i.amount) || 0), 0),
+    misc: miscItems.reduce((a, i) => a + (Number(i.amount) || 0), 0),
+  };
+  const grandTotal = totals.salaries + totals.advances + totals.raw + totals.machine + totals.misc;
+
+  const fmt = (n) => formatMoney(n, 2);
+
+  const categories = [
+    { key: 'salaries', label: 'مرتبات', total: totals.salaries, count: salaries.length, color: 'var(--accent)' },
+    { key: 'advances', label: 'سلف', total: totals.advances, count: advances.length, color: '#7c3aed' },
+    { key: 'raw', label: 'خامات', total: totals.raw, count: rawItems.length, color: '#d97706' },
+    { key: 'machine', label: 'صيانة ماكينات', total: totals.machine, count: machineItems.length, color: '#0891b2' },
+    { key: 'misc', label: 'نثريات', total: totals.misc, count: miscItems.length, color: '#dc2626' },
+  ];
+
+  const tabStyle = (tab) => ({
+    padding: '7px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+    fontWeight: 600, fontSize: '0.88rem',
+    background: activeTab === tab ? 'var(--accent)' : 'var(--accent-soft)',
+    color: activeTab === tab ? '#fff' : 'var(--accent)', transition: 'all 0.2s'
+  });
+
+  const thStyle = { padding: '9px 12px', textAlign: 'right', fontWeight: 700 };
+  const tdStyle = { padding: '8px 12px', borderBottom: '1px solid var(--line)' };
+  const tdCenter = { ...tdStyle, textAlign: 'center' };
+
+  return (
+    <section className="card table-card" style={{ padding: '24px' }}>
+      <div className="table-actions-header" style={{ marginBottom: '16px' }}>
+        <div>
+          <p className="eyebrow">التقارير المالية</p>
+          <h3>تقرير المصروفات</h3>
+        </div>
+        <button type="button" className="ghost-button small" onClick={() => window.print()}>طباعة</button>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '16px', padding: '12px', background: 'var(--accent-soft)', borderRadius: '10px' }}>
+        <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontWeight: 600 }}>
+          <span>من:</span>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ padding: '7px 10px', borderRadius: '8px', border: '1px solid var(--line)', fontSize: '0.92rem' }} />
+        </label>
+        <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontWeight: 600 }}>
+          <span>إلى:</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ padding: '7px 10px', borderRadius: '8px', border: '1px solid var(--line)', fontSize: '0.92rem' }} />
+        </label>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+        {categories.map(c => (
+          <div key={c.key} style={{ padding: '12px', background: 'var(--surface)', borderRadius: '10px', border: '1px solid var(--line)', textAlign: 'center', borderTop: `3px solid ${c.color}` }}>
+            <div style={{ color: c.color, fontWeight: 700, fontSize: '1rem' }}>{fmt(c.total)}</div>
+            <div style={{ fontWeight: 600, fontSize: '0.88rem', marginTop: '4px' }}>{c.label}</div>
+            <div style={{ color: 'var(--muted)', fontSize: '0.78rem' }}>{c.count} عملية</div>
+          </div>
+        ))}
+        <div style={{ padding: '12px', background: 'var(--accent)', borderRadius: '10px', textAlign: 'center', color: '#fff' }}>
+          <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>{fmt(grandTotal)}</div>
+          <div style={{ fontWeight: 600, fontSize: '0.88rem', marginTop: '4px' }}>الإجمالي الكلي</div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+        <button style={tabStyle('summary')} onClick={() => setActiveTab('summary')}>ملخص</button>
+        <button style={tabStyle('salaries')} onClick={() => setActiveTab('salaries')}>مرتبات ({salaries.length})</button>
+        <button style={tabStyle('advances')} onClick={() => setActiveTab('advances')}>سلف ({advances.length})</button>
+        <button style={tabStyle('raw')} onClick={() => setActiveTab('raw')}>خامات ({rawItems.length})</button>
+        <button style={tabStyle('machine')} onClick={() => setActiveTab('machine')}>صيانة ({machineItems.length})</button>
+        <button style={tabStyle('misc')} onClick={() => setActiveTab('misc')}>نثريات ({miscItems.length})</button>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+
+        {/* Summary tab */}
+        {activeTab === 'summary' && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', direction: 'rtl' }}>
+            <thead>
+              <tr style={{ background: 'var(--accent-soft)', borderBottom: '2px solid var(--accent)' }}>
+                <th style={thStyle}>نوع المصروف</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>عدد العمليات</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>الإجمالي</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>النسبة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((c, i) => (
+                <tr key={c.key} style={{ borderBottom: '1px solid var(--line)', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                  <td style={{ ...tdStyle, fontWeight: 700, color: c.color }}>{c.label}</td>
+                  <td style={tdCenter}>{c.count}</td>
+                  <td style={{ ...tdCenter, fontWeight: 600 }}>{fmt(c.total)}</td>
+                  <td style={tdCenter}>{grandTotal > 0 ? ((c.total / grandTotal) * 100).toFixed(1) : '0.0'}%</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: 'var(--accent-soft)', fontWeight: 800, borderTop: '2px solid var(--accent)' }}>
+                <td style={{ padding: '10px 12px' }}>الإجمالي الكلي</td>
+                <td style={{ padding: '10px 12px', textAlign: 'center' }}>{categories.reduce((a, c) => a + c.count, 0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--accent)' }}>{fmt(grandTotal)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'center' }}>100%</td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+
+        {/* Salaries tab */}
+        {activeTab === 'salaries' && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', direction: 'rtl' }}>
+            <thead><tr style={{ background: 'var(--accent-soft)', borderBottom: '2px solid var(--accent)' }}>
+              <th style={thStyle}>الموظف</th><th style={{ ...thStyle, textAlign: 'center' }}>الشهر</th>
+              <th style={{ ...thStyle, textAlign: 'center' }}>الحالة</th><th style={{ ...thStyle, textAlign: 'center' }}>المبلغ</th>
+            </tr></thead>
+            <tbody>
+              {salaries.length === 0 ? <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>لا توجد بيانات.</td></tr>
+                : salaries.map((i, idx) => (
+                <tr key={i.id} style={{ borderBottom: '1px solid var(--line)', background: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                  <td style={tdStyle}>{i.employeeName}</td>
+                  <td style={tdCenter}>{i.month}</td>
+                  <td style={tdCenter}>{i.status}</td>
+                  <td style={{ ...tdCenter, fontWeight: 600, color: 'var(--accent)' }}>{fmt(i.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {salaries.length > 0 && <tfoot><tr style={{ background: 'var(--accent-soft)', fontWeight: 700, borderTop: '2px solid var(--accent)' }}>
+              <td colSpan={3} style={{ padding: '9px 12px' }}>الإجمالي</td>
+              <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--accent)' }}>{fmt(totals.salaries)}</td>
+            </tr></tfoot>}
+          </table>
+        )}
+
+        {/* Advances tab */}
+        {activeTab === 'advances' && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', direction: 'rtl' }}>
+            <thead><tr style={{ background: 'var(--accent-soft)', borderBottom: '2px solid var(--accent)' }}>
+              <th style={thStyle}>الموظف</th><th style={{ ...thStyle, textAlign: 'center' }}>الشهر</th>
+              <th style={{ ...thStyle, textAlign: 'center' }}>الحالة</th><th style={{ ...thStyle, textAlign: 'center' }}>المبلغ</th>
+            </tr></thead>
+            <tbody>
+              {advances.length === 0 ? <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>لا توجد بيانات.</td></tr>
+                : advances.map((i, idx) => (
+                <tr key={i.id} style={{ borderBottom: '1px solid var(--line)', background: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                  <td style={tdStyle}>{i.employeeName}</td>
+                  <td style={tdCenter}>{i.month}</td>
+                  <td style={tdCenter}>{i.status}</td>
+                  <td style={{ ...tdCenter, fontWeight: 600, color: '#7c3aed' }}>{fmt(i.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {advances.length > 0 && <tfoot><tr style={{ background: 'var(--accent-soft)', fontWeight: 700, borderTop: '2px solid var(--accent)' }}>
+              <td colSpan={3} style={{ padding: '9px 12px' }}>الإجمالي</td>
+              <td style={{ padding: '9px 12px', textAlign: 'center', color: '#7c3aed' }}>{fmt(totals.advances)}</td>
+            </tr></tfoot>}
+          </table>
+        )}
+
+        {/* Raw materials tab */}
+        {activeTab === 'raw' && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', direction: 'rtl' }}>
+            <thead><tr style={{ background: 'var(--accent-soft)', borderBottom: '2px solid var(--accent)' }}>
+              <th style={thStyle}>الخامة</th><th style={thStyle}>المورد</th>
+              <th style={{ ...thStyle, textAlign: 'center' }}>التاريخ</th><th style={{ ...thStyle, textAlign: 'center' }}>الكمية</th>
+              <th style={{ ...thStyle, textAlign: 'center' }}>الإجمالي</th>
+            </tr></thead>
+            <tbody>
+              {rawItems.length === 0 ? <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>لا توجد بيانات.</td></tr>
+                : rawItems.map((i, idx) => (
+                <tr key={i.id} style={{ borderBottom: '1px solid var(--line)', background: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                  <td style={tdStyle}>{i.materialName}</td>
+                  <td style={{ ...tdStyle, color: 'var(--muted)' }}>{i.supplierName}</td>
+                  <td style={tdCenter}>{formatDate(i.purchaseDate)}</td>
+                  <td style={tdCenter}>{i.quantity}</td>
+                  <td style={{ ...tdCenter, fontWeight: 600, color: '#d97706' }}>{fmt(i.totalAmount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {rawItems.length > 0 && <tfoot><tr style={{ background: 'var(--accent-soft)', fontWeight: 700, borderTop: '2px solid var(--accent)' }}>
+              <td colSpan={4} style={{ padding: '9px 12px' }}>الإجمالي</td>
+              <td style={{ padding: '9px 12px', textAlign: 'center', color: '#d97706' }}>{fmt(totals.raw)}</td>
+            </tr></tfoot>}
+          </table>
+        )}
+
+        {/* Machine tab */}
+        {activeTab === 'machine' && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', direction: 'rtl' }}>
+            <thead><tr style={{ background: 'var(--accent-soft)', borderBottom: '2px solid var(--accent)' }}>
+              <th style={thStyle}>البيان</th><th style={thStyle}>الماكينة</th>
+              <th style={{ ...thStyle, textAlign: 'center' }}>التاريخ</th><th style={{ ...thStyle, textAlign: 'center' }}>المبلغ</th>
+            </tr></thead>
+            <tbody>
+              {machineItems.length === 0 ? <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>لا توجد بيانات.</td></tr>
+                : machineItems.map((i, idx) => (
+                <tr key={i.id} style={{ borderBottom: '1px solid var(--line)', background: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                  <td style={tdStyle}>{i.description}</td>
+                  <td style={{ ...tdStyle, color: 'var(--muted)' }}>{i.machineName}</td>
+                  <td style={tdCenter}>{formatDate(i.purchaseDate)}</td>
+                  <td style={{ ...tdCenter, fontWeight: 600, color: '#0891b2' }}>{fmt(i.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {machineItems.length > 0 && <tfoot><tr style={{ background: 'var(--accent-soft)', fontWeight: 700, borderTop: '2px solid var(--accent)' }}>
+              <td colSpan={3} style={{ padding: '9px 12px' }}>الإجمالي</td>
+              <td style={{ padding: '9px 12px', textAlign: 'center', color: '#0891b2' }}>{fmt(totals.machine)}</td>
+            </tr></tfoot>}
+          </table>
+        )}
+
+        {/* Misc tab */}
+        {activeTab === 'misc' && (
+          <>
+            {/* By category summary */}
+            {Object.values(miscByCategory).length > 1 && (
+              <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {Object.values(miscByCategory).map(c => (
+                  <div key={c.label} style={{ padding: '8px 14px', background: 'var(--accent-soft)', borderRadius: '8px', fontSize: '0.85rem' }}>
+                    <span style={{ fontWeight: 700 }}>{c.label}</span>: {fmt(c.total)} ({c.count} عملية)
+                  </div>
+                ))}
+              </div>
+            )}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', direction: 'rtl' }}>
+              <thead><tr style={{ background: 'var(--accent-soft)', borderBottom: '2px solid var(--accent)' }}>
+                <th style={thStyle}>البيان</th><th style={thStyle}>التصنيف</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>التاريخ</th><th style={{ ...thStyle, textAlign: 'center' }}>المبلغ</th>
+              </tr></thead>
+              <tbody>
+                {miscItems.length === 0 ? <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>لا توجد بيانات.</td></tr>
+                  : miscItems.map((i, idx) => (
+                  <tr key={i.id} style={{ borderBottom: '1px solid var(--line)', background: idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                    <td style={tdStyle}>{i.description}</td>
+                    <td style={{ ...tdStyle, color: 'var(--muted)' }}>{i.category}</td>
+                    <td style={tdCenter}>{formatDate(i.purchaseDate)}</td>
+                    <td style={{ ...tdCenter, fontWeight: 600, color: '#dc2626' }}>{fmt(i.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {miscItems.length > 0 && <tfoot><tr style={{ background: 'var(--accent-soft)', fontWeight: 700, borderTop: '2px solid var(--accent)' }}>
+                <td colSpan={3} style={{ padding: '9px 12px' }}>الإجمالي</td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: '#dc2626' }}>{fmt(totals.misc)}</td>
+              </tr></tfoot>}
+            </table>
+          </>
+        )}
+
+      </div>
+    </section>
+  );
+}
+
+function RepReportView({ sales, creditSales, returns, salesRepOptions }) {
+  const today = new Date().toISOString().split('T')[0];
+  const firstOfMonth = today.slice(0, 8) + '01';
+  const [dateFrom, setDateFrom] = useState(firstOfMonth);
+  const [dateTo, setDateTo] = useState(today);
+  const [selectedRep, setSelectedRep] = useState('الكل');
+  const [activeTab, setActiveTab] = useState('sales');
+
+  const inRange = (dateStr) => {
+    if (!dateStr) return false;
+    return dateStr >= dateFrom && dateStr <= dateTo;
+  };
+
+  const repMatch = (rep) => selectedRep === 'الكل' || rep === selectedRep;
+
+  // Sales rows
+  const salesRows = sales.items.filter(s => repMatch(s.salesRep) && inRange(s.saleDate));
+  const totalSales = salesRows.reduce((a, s) => a + (Number(s.amount) || 0), 0);
+
+  // Credit sales rows (collections = paidAmount, no date filter since no sale date stored)
+  const creditRows = creditSales.items.filter(s => repMatch(s.salesRep));
+  const totalCollections = creditRows.reduce((a, s) => a + (Number(s.paidAmount) || 0), 0);
+
+  // Returns rows
+  const returnRows = returns.items.filter(r => repMatch(r.salesRep) && inRange(r.returnDate));
+  const totalReturns = returnRows.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+
+  const fmt = (n) => formatMoney(n, 2);
+  const allReps = ['الكل', ...salesRepOptions];
+
+  const tabStyle = (tab) => ({
+    padding: '8px 20px',
+    borderRadius: '8px',
+    border: 'none',
+    cursor: 'pointer',
+    fontWeight: 600,
+    fontSize: '0.9rem',
+    background: activeTab === tab ? 'var(--accent)' : 'var(--accent-soft)',
+    color: activeTab === tab ? '#fff' : 'var(--accent)',
+    transition: 'all 0.2s'
+  });
+
+  return (
+    <section className="card table-card" style={{ padding: '24px' }}>
+      <div className="table-actions-header" style={{ marginBottom: '16px' }}>
+        <div>
+          <p className="eyebrow">تقارير المناديب</p>
+          <h3>تقرير حركة المندوب</h3>
+        </div>
+        <button type="button" className="ghost-button small" onClick={() => window.print()}>طباعة</button>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '16px', padding: '12px', background: 'var(--accent-soft)', borderRadius: '10px' }}>
+        <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontWeight: 600 }}>
+          <span>المندوب:</span>
+          <select value={selectedRep} onChange={e => setSelectedRep(e.target.value)} style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--line)', fontSize: '0.92rem' }}>
+            {allReps.map(r => <option key={r}>{r}</option>)}
+          </select>
+        </label>
+        <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontWeight: 600 }}>
+          <span>من:</span>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ padding: '7px 10px', borderRadius: '8px', border: '1px solid var(--line)', fontSize: '0.92rem' }} />
+        </label>
+        <label style={{ display: 'flex', gap: '6px', alignItems: 'center', fontWeight: 600 }}>
+          <span>إلى:</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ padding: '7px 10px', borderRadius: '8px', border: '1px solid var(--line)', fontSize: '0.92rem' }} />
+        </label>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
+        {[
+          { label: 'إجمالي المبيعات', value: totalSales, count: salesRows.length, color: 'var(--accent)' },
+          { label: 'إجمالي التحصيلات', value: totalCollections, count: creditRows.length, color: '#2d9e5f' },
+          { label: 'إجمالي المرتجعات', value: totalReturns, count: returnRows.length, color: 'var(--danger)' }
+        ].map(card => (
+          <div key={card.label} style={{ padding: '14px', background: 'var(--surface)', borderRadius: '10px', border: '1px solid var(--line)', textAlign: 'center' }}>
+            <div style={{ color: card.color, fontWeight: 700, fontSize: '1.1rem' }}>{fmt(card.value)}</div>
+            <div style={{ color: 'var(--muted)', fontSize: '0.82rem', marginTop: '4px' }}>{card.label} ({card.count} عملية)</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+        <button style={tabStyle('sales')} onClick={() => setActiveTab('sales')}>المبيعات ({salesRows.length})</button>
+        <button style={tabStyle('collections')} onClick={() => setActiveTab('collections')}>التحصيلات ({creditRows.length})</button>
+        <button style={tabStyle('returns')} onClick={() => setActiveTab('returns')}>المرتجعات ({returnRows.length})</button>
+      </div>
+
+      {/* Tables */}
+      <div style={{ overflowX: 'auto' }}>
+        {activeTab === 'sales' && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', direction: 'rtl' }}>
+            <thead>
+              <tr style={{ background: 'var(--accent-soft)', borderBottom: '2px solid var(--accent)' }}>
+                <th style={{ padding: '9px 12px', textAlign: 'right' }}>العميل</th>
+                <th style={{ padding: '9px 12px', textAlign: 'right' }}>المندوب</th>
+                <th style={{ padding: '9px 12px', textAlign: 'center' }}>التاريخ</th>
+                <th style={{ padding: '9px 12px', textAlign: 'center' }}>المبلغ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {salesRows.length === 0 ? (
+                <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>لا توجد مبيعات في هذه الفترة.</td></tr>
+              ) : salesRows.map((s, i) => (
+                <tr key={s.id} style={{ borderBottom: '1px solid var(--line)', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                  <td style={{ padding: '8px 12px' }}>{s.customerName}</td>
+                  <td style={{ padding: '8px 12px', color: 'var(--muted)' }}>{s.salesRep}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'center' }}>{formatDate(s.saleDate)}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 600, color: 'var(--accent)' }}>{fmt(s.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {salesRows.length > 0 && (
+              <tfoot>
+                <tr style={{ background: 'var(--accent-soft)', fontWeight: 700, borderTop: '2px solid var(--accent)' }}>
+                  <td colSpan={3} style={{ padding: '9px 12px' }}>الإجمالي</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--accent)' }}>{fmt(totalSales)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        )}
+
+        {activeTab === 'collections' && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', direction: 'rtl' }}>
+            <thead>
+              <tr style={{ background: 'var(--accent-soft)', borderBottom: '2px solid var(--accent)' }}>
+                <th style={{ padding: '9px 12px', textAlign: 'right' }}>العميل</th>
+                <th style={{ padding: '9px 12px', textAlign: 'right' }}>المندوب</th>
+                <th style={{ padding: '9px 12px', textAlign: 'center' }}>الحالة</th>
+                <th style={{ padding: '9px 12px', textAlign: 'center' }}>المبلغ المحصّل</th>
+              </tr>
+            </thead>
+            <tbody>
+              {creditRows.length === 0 ? (
+                <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>لا توجد تحصيلات.</td></tr>
+              ) : creditRows.map((s, i) => (
+                <tr key={s.id} style={{ borderBottom: '1px solid var(--line)', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                  <td style={{ padding: '8px 12px' }}>{s.customerName}</td>
+                  <td style={{ padding: '8px 12px', color: 'var(--muted)' }}>{s.salesRep}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'center' }}>{s.status}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 600, color: '#2d9e5f' }}>{fmt(s.paidAmount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {creditRows.length > 0 && (
+              <tfoot>
+                <tr style={{ background: 'var(--accent-soft)', fontWeight: 700, borderTop: '2px solid var(--accent)' }}>
+                  <td colSpan={3} style={{ padding: '9px 12px' }}>الإجمالي</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'center', color: '#2d9e5f' }}>{fmt(totalCollections)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        )}
+
+        {activeTab === 'returns' && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', direction: 'rtl' }}>
+            <thead>
+              <tr style={{ background: 'var(--accent-soft)', borderBottom: '2px solid var(--accent)' }}>
+                <th style={{ padding: '9px 12px', textAlign: 'right' }}>العميل</th>
+                <th style={{ padding: '9px 12px', textAlign: 'right' }}>المندوب</th>
+                <th style={{ padding: '9px 12px', textAlign: 'center' }}>التاريخ</th>
+                <th style={{ padding: '9px 12px', textAlign: 'center' }}>المبلغ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {returnRows.length === 0 ? (
+                <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>لا توجد مرتجعات في هذه الفترة.</td></tr>
+              ) : returnRows.map((r, i) => (
+                <tr key={r.id} style={{ borderBottom: '1px solid var(--line)', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                  <td style={{ padding: '8px 12px' }}>{r.customerName}</td>
+                  <td style={{ padding: '8px 12px', color: 'var(--muted)' }}>{r.salesRep}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'center' }}>{formatDate(r.returnDate)}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 600, color: 'var(--danger)' }}>{fmt(r.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {returnRows.length > 0 && (
+              <tfoot>
+                <tr style={{ background: 'var(--accent-soft)', fontWeight: 700, borderTop: '2px solid var(--accent)' }}>
+                  <td colSpan={3} style={{ padding: '9px 12px' }}>الإجمالي</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--danger)' }}>{fmt(totalReturns)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function GovernorateReportView({ customers, sales, creditSales, returns }) {
+  const governorates = ['الكل', ...Array.from(new Set(customers.items.map(c => c.governorate || 'غير محدد').filter(Boolean))).sort()];
+  const [selectedGov, setSelectedGov] = useState('الكل');
+
+  // Build per-customer totals
+  const customerMap = {};
+  customers.items.forEach(c => {
+    customerMap[c.name] = { name: c.name, governorate: c.governorate || 'غير محدد', sales: 0, collections: 0, returns: 0 };
+  });
+
+  // Sales (debit)
+  sales.items.forEach(s => {
+    if (!customerMap[s.customerName]) customerMap[s.customerName] = { name: s.customerName, governorate: 'غير محدد', sales: 0, collections: 0, returns: 0 };
+    customerMap[s.customerName].sales += Number(s.amount) || 0;
+  });
+
+  // Credit sales (debit) + payments (credit)
+  creditSales.items.forEach(cs => {
+    if (!customerMap[cs.customerName]) customerMap[cs.customerName] = { name: cs.customerName, governorate: 'غير محدد', sales: 0, collections: 0, returns: 0 };
+    customerMap[cs.customerName].sales += Number(cs.amount) || 0;
+    customerMap[cs.customerName].collections += Number(cs.paidAmount) || 0;
+  });
+
+  // Returns (credit)
+  returns.items.forEach(r => {
+    if (!customerMap[r.customerName]) customerMap[r.customerName] = { name: r.customerName, governorate: 'غير محدد', sales: 0, collections: 0, returns: 0 };
+    customerMap[r.customerName].returns += Number(r.amount) || 0;
+  });
+
+  const rows = Object.values(customerMap).filter(r => {
+    if (selectedGov === 'الكل') return true;
+    return r.governorate === selectedGov;
+  });
+
+  const totals = rows.reduce((acc, r) => {
+    acc.sales += r.sales;
+    acc.collections += r.collections;
+    acc.returns += r.returns;
+    return acc;
+  }, { sales: 0, collections: 0, returns: 0 });
+
+  const fmt = (n) => formatMoney(n, 2);
+  const balance = (r) => r.sales - r.collections - r.returns;
+  const totalBalance = totals.sales - totals.collections - totals.returns;
+
+  return (
+    <section className="card table-card" style={{ padding: '24px' }}>
+      <div className="table-actions-header" style={{ marginBottom: '16px' }}>
+        <div>
+          <p className="eyebrow">تقارير المديونية</p>
+          <h3>تقرير مديونية العملاء بالمحافظة</h3>
+        </div>
+        <button type="button" className="ghost-button small" onClick={() => window.print()}>طباعة</button>
+      </div>
+
+      <div style={{ marginBottom: '16px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', gap: '8px', alignItems: 'center', fontWeight: 600 }}>
+          <span>المحافظة:</span>
+          <select value={selectedGov} onChange={e => setSelectedGov(e.target.value)} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--line)', fontSize: '0.95rem' }}>
+            {governorates.map(g => <option key={g}>{g}</option>)}
+          </select>
+        </label>
+        <span className="status-chip neutral">{rows.length} عميل</span>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.92rem', direction: 'rtl' }}>
+          <thead>
+            <tr style={{ background: 'var(--accent-soft)', borderBottom: '2px solid var(--accent)' }}>
+              <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>الاسم</th>
+              <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700 }}>المبيعات</th>
+              <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700 }}>التحصيلات</th>
+              <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700 }}>المرتجعات</th>
+              <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700 }}>المديونية</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>لا توجد بيانات للمحافظة المختارة.</td></tr>
+            ) : rows.map((r, i) => {
+              const bal = balance(r);
+              const isDebit = bal >= 0;
+              return (
+                <tr key={r.name} style={{ borderBottom: '1px solid var(--line)', background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.02)' }}>
+                  <td style={{ padding: '9px 12px', fontWeight: 600 }}>{r.name}</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'center' }}>{fmt(r.sales)}</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'center' }}>{fmt(r.collections)}</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'center' }}>{fmt(r.returns)}</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: isDebit ? 'var(--danger)' : 'var(--accent)' }}>
+                    {fmt(Math.abs(bal))} {isDebit ? 'مدين' : 'دائن'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: 'var(--accent-soft)', borderTop: '2px solid var(--accent)', fontWeight: 700 }}>
+              <td style={{ padding: '10px 12px' }}>المجموع</td>
+              <td style={{ padding: '10px 12px', textAlign: 'center' }}>{fmt(totals.sales)}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'center' }}>{fmt(totals.collections)}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'center' }}>{fmt(totals.returns)}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'center', color: totalBalance >= 0 ? 'var(--danger)' : 'var(--accent)' }}>
+                {fmt(Math.abs(totalBalance))} {totalBalance >= 0 ? 'مدين' : 'دائن'}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -4420,6 +5035,34 @@ function MainApp({ auth, onLogout }) {
             customers={customerOptions}
             onCustomerChange={handleStatementCustomerChange}
             onPrint={handleStatementPrint}
+          />
+        ) : null}
+
+        {!loading && activeView === 'gov-report' ? (
+          <GovernorateReportView
+            customers={customers}
+            sales={sales}
+            creditSales={creditSales}
+            returns={returns}
+          />
+        ) : null}
+
+        {!loading && activeView === 'rep-report' ? (
+          <RepReportView
+            sales={sales}
+            creditSales={creditSales}
+            returns={returns}
+            salesRepOptions={salesRepOptions}
+          />
+        ) : null}
+
+        {!loading && activeView === 'expenses-report' ? (
+          <ExpensesReportView
+            custodies={custodies}
+            rawPurchases={rawPurchases}
+            machinePurchases={machinePurchases}
+            miscPurchases={miscPurchases}
+            payrollAdvances={payrollAdvances}
           />
         ) : null}
 
